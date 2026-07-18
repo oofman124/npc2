@@ -6,7 +6,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.NpcController;
-import npc2.npc2.ai.crafting.WorkstationCrafting;
+import npc2.npc2.ai.CoolEntity;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.BedBlock;
@@ -15,44 +15,47 @@ import net.minecraft.world.level.block.BedBlock;
 public final class SurvivalNeeds {
     public static final int FOOD_TARGET = 8;
     public static final int LOG_TARGET = 16;
-    public static final int COBBLESTONE_TARGET = 16;
+    public static final int COBBLESTONE_TARGET = 24;
     public static final int SOIL_TARGET = 12;
     public static final int FUEL_TARGET = 8;
     public static final int TORCH_TARGET = 16;
+    public static final int IRON_TARGET = 12;
+    public static final int DIAMOND_TARGET = 6;
 
     private SurvivalNeeds() {
     }
 
     public static double food(FakeNpcEntity npc, NpcController controller) {
-        double deficit = deficit(controller.countFood(npc), FOOD_TARGET);
-        double injury = 1.0D - npc.getHealth() / npc.getMaxHealth();
-        return deficit * 55.0D + injury * 90.0D;
+        return planFor(npc, controller).score(SurvivalPlanner.Resource.FOOD);
     }
 
     public static double materials(FakeNpcEntity npc, NpcController controller) {
-        SimpleContainer bag = npc.getInventory();
-        return Math.max(
-                deficit(controller.countInventoryTag(bag, ItemTags.LOGS), LOG_TARGET) * 45.0D,
-                Math.max(deficit(bag.countItem(Items.COBBLESTONE), COBBLESTONE_TARGET) * 40.0D,
-                        Math.max(deficit(bag.countItem(Items.DIRT), SOIL_TARGET) * 24.0D,
-                                deficit(countFuel(bag), FUEL_TARGET) * 32.0D)));
+        return planFor(npc, controller).highestGatheringScore();
     }
 
     public static double tools(FakeNpcEntity npc, NpcController controller) {
-        return WorkstationCrafting.canCraft(npc, controller) ? 36.0D : 0.0D;
+        return planFor(npc, controller).actionScore();
     }
 
     public static double light(FakeNpcEntity npc) {
-        double deficit = deficit(npc.getInventory().countItem(Items.TORCH), TORCH_TARGET);
-        return deficit * (npc.level().isBrightOutside() ? 18.0D : 42.0D);
+        return planFor(npc, npc.getController()).score(SurvivalPlanner.Resource.TORCHES);
     }
 
     public static boolean foodOutranksGathering(FakeNpcEntity npc, NpcController controller) {
-        return food(npc, controller) >= Math.max(materials(npc, controller), tools(npc, controller));
+        SurvivalPlanner.Plan plan = planFor(npc, controller);
+        return plan.score(SurvivalPlanner.Resource.FOOD)
+                >= Math.max(plan.highestGatheringScore(), plan.actionScore());
     }
 
     public static int countFuel(SimpleContainer bag) {
         return bag.countItem(Items.COAL) + bag.countItem(Items.CHARCOAL);
+    }
+
+    public static SurvivalPlanner.Plan planFor(FakeNpcEntity npc, NpcController controller) {
+        if (npc instanceof CoolEntity cool && cool.brain != null && cool.brain.plan != null) {
+            return cool.brain.plan;
+        }
+        return SurvivalPlanner.create(npc, controller);
     }
 
     public static boolean ownsBed(FakeNpcEntity npc) {
@@ -74,7 +77,4 @@ public final class SurvivalNeeds {
         return time >= 12542L && time < 23460L;
     }
 
-    private static double deficit(int current, int target) {
-        return Math.max(0.0D, target - current) / target;
-    }
 }

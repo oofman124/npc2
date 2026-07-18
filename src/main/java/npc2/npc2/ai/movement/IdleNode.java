@@ -35,7 +35,8 @@ public class IdleNode extends ExecutableNode {
             context.get("Controller") instanceof NpcController controller) {
             if (brain.target != null || brain.wanderTarget != null || brain.blockingMob || brain.floating || brain.seekingLoot
                     || brain.seekingChest || brain.seekingBed || brain.depositing || brain.gatheringResource
-                    || brain.seekingCraftingTable || npc.isSleeping()) {
+                    || brain.seekingCraftingTable || brain.processingFurnace || npc.isSleeping()
+                    || brain.hasPlannedWork()) {
                 this.outPort.fire(context);
                 return;
             }

@@ -155,10 +155,10 @@ public final class NpcPathNavigation {
 	}
 
 	/**
-	 * No-op: {@link net.minecraft.world.entity.Mob} ticks navigation each server AI step.
-	 * Kept so callers that still invoke tick remain valid.
+	 * Track wrapper-specific progress once per server tick. Vanilla still advances the path itself.
 	 */
 	public void tick() {
+		this.trackProgress();
 	}
 
 	private void trackProgress() {
@@ -166,6 +166,13 @@ public final class NpcPathNavigation {
 		if (gameTick == this.lastProgressCheckTick) return;
 		this.lastProgressCheckTick = gameTick;
 		Vec3 position = this.mob.position();
+		Path path = this.navigation.getPath();
+		if (path == null || this.navigation.isDone()) {
+			this.lastProgressPos = position;
+			this.noProgressTicks = 0;
+			this.partialPathTicks = 0;
+			return;
+		}
 		double dx = position.x - this.lastProgressPos.x;
 		double dz = position.z - this.lastProgressPos.z;
 		if (dx * dx + dz * dz >= 0.04D) {
@@ -174,8 +181,7 @@ public final class NpcPathNavigation {
 		} else {
 			this.noProgressTicks = Math.min(200, this.noProgressTicks + 1);
 		}
-		Path path = this.navigation.getPath();
-		if (path != null && !pathActuallyReaches(path, this.lastTargetPos)) {
+		if (!pathActuallyReaches(path, this.lastTargetPos)) {
 			this.partialPathTicks = Math.min(200, this.partialPathTicks + 1);
 		} else {
 			this.partialPathTicks = 0;

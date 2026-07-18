@@ -34,7 +34,9 @@ public class GatherResourcesNode extends ExecutableNode {
     protected void onExecute(Context context) {
         if (context != null && context.get("Brain") instanceof NpcBrain brain) {
             if (!this.searchPhaseInitialized) {
-                this.searchCooldown = Math.floorMod(brain.npc.getId(), SEARCH_INTERVAL);
+                // A newly-selected gather plan must search immediately. Stagger only
+                // subsequent retries; otherwise the NPC looks idle for up to three seconds.
+                this.searchCooldown = 0;
                 this.searchPhaseInitialized = true;
             }
             if (brain.resourceTarget != null

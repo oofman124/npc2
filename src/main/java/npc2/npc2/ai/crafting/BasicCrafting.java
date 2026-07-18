@@ -11,17 +11,28 @@ import npc2.npc2.NpcController;
 
 /** A deliberately small hand-crafting ruleset for fundamental supplies. */
 public final class BasicCrafting {
+    private static final int PLANK_STOCKPILE = 8;
+    private static final int STICK_STOCKPILE = 4;
+
     private BasicCrafting() {
     }
 
     public static boolean canCraft(FakeNpcEntity npc, NpcController controller) {
+        return craftingPriority(npc, controller) > 0.0D;
+    }
+
+    public static double craftingPriority(FakeNpcEntity npc, NpcController controller) {
         SimpleContainer bag = npc.getInventory();
         int planks = countTag(bag, ItemTags.PLANKS);
         int sticks = bag.countItem(Items.STICK);
-        return (planks < 4 && countTag(bag, ItemTags.LOGS) >= 1 && canAdd(bag, Items.OAK_PLANKS, 4))
-                || (sticks < 2 && planks >= 2 && canAdd(bag, Items.STICK, 4))
-                || (bag.countItem(Items.CRAFTING_TABLE) == 0 && planks >= 4 && canAdd(bag, Items.CRAFTING_TABLE, 1))
-                || (bag.countItem(Items.TORCH) < 16 && sticks >= 1 && countCoal(bag) >= 1 && canAdd(bag, Items.TORCH, 4));
+        if (planks < PLANK_STOCKPILE && countTag(bag, ItemTags.LOGS) >= 1
+                && canAdd(bag, Items.OAK_PLANKS, 4)) return 100.0D;
+        if (sticks < STICK_STOCKPILE && planks >= 2 && canAdd(bag, Items.STICK, 4)) return 98.0D;
+        if (!CraftingStations.hasAvailable(npc) && planks >= 4
+                && canAdd(bag, Items.CRAFTING_TABLE, 1)) return 96.0D;
+        if (bag.countItem(Items.TORCH) < 16 && sticks >= 1 && countCoal(bag) >= 1
+                && canAdd(bag, Items.TORCH, 4)) return 44.0D;
+        return 0.0D;
     }
 
     public static boolean craftOne(FakeNpcEntity npc, NpcController controller) {
@@ -29,17 +40,18 @@ public final class BasicCrafting {
         int planks = countTag(bag, ItemTags.PLANKS);
         int sticks = bag.countItem(Items.STICK);
 
-        if (planks < 4 && countTag(bag, ItemTags.LOGS) >= 1 && canAdd(bag, Items.OAK_PLANKS, 4)) {
+        if (planks < PLANK_STOCKPILE && countTag(bag, ItemTags.LOGS) >= 1
+                && canAdd(bag, Items.OAK_PLANKS, 4)) {
             consumeTag(bag, ItemTags.LOGS, 1);
             bag.addItem(new ItemStack(Items.OAK_PLANKS, 4));
             return true;
         }
-        if (sticks < 2 && planks >= 2 && canAdd(bag, Items.STICK, 4)) {
+        if (sticks < STICK_STOCKPILE && planks >= 2 && canAdd(bag, Items.STICK, 4)) {
             consumeTag(bag, ItemTags.PLANKS, 2);
             bag.addItem(new ItemStack(Items.STICK, 4));
             return true;
         }
-        if (bag.countItem(Items.CRAFTING_TABLE) == 0 && planks >= 4 && canAdd(bag, Items.CRAFTING_TABLE, 1)) {
+        if (!CraftingStations.hasAvailable(npc) && planks >= 4 && canAdd(bag, Items.CRAFTING_TABLE, 1)) {
             consumeTag(bag, ItemTags.PLANKS, 4);
             bag.addItem(new ItemStack(Items.CRAFTING_TABLE));
             return true;

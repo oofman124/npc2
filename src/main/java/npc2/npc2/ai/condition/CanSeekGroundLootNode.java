@@ -23,6 +23,7 @@ public class CanSeekGroundLootNode extends ConditionNode {
                 && !this.brain.depositing
                 && !this.brain.gatheringResource
                 && !this.brain.seekingCraftingTable
+                && !this.brain.processingFurnace
                 && !this.brain.npc.isSleeping();
         if (!allowed) {
             LootReservations.release(this.brain.npc);

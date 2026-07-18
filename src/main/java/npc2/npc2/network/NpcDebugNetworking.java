@@ -9,7 +9,7 @@ import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec3;
 import npc2.npc2.ai.CoolEntity;
 import npc2.npc2.ai.NpcBrain;
-import npc2.npc2.ai.survival.SurvivalNeeds;
+import npc2.npc2.ai.survival.SurvivalPlanner;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -47,10 +47,13 @@ public final class NpcDebugNetworking {
         List<String> ai = new ArrayList<>();
         ai.add("State: " + activeState(brain));
         ai.add("Target: " + (brain.target == null ? "none" : brain.target.getName().getString()));
-        ai.add(String.format(Locale.ROOT, "Needs F %.0f  M %.0f  T %.0f",
-                SurvivalNeeds.food(npc, brain.controller),
-                SurvivalNeeds.materials(npc, brain.controller),
-                SurvivalNeeds.tools(npc, brain.controller)));
+        ai.add("Plan: " + (brain.plan.shouldGather()
+                ? "gather"
+                : brain.plan.action().name().toLowerCase(Locale.ROOT)));
+        for (SurvivalPlanner.Need need : brain.plan.rankedNeeds().stream().limit(2).toList()) {
+            ai.add(String.format(Locale.ROOT, "%s %d/%d  %.0f",
+                    need.resource(), need.current(), need.target(), need.score()));
+        }
         if (brain.resourceTarget != null) {
             ai.add("Resource: " + brain.resourceTarget.kind() + " " + compact(brain.resourceTarget.blockPos()));
         }
@@ -97,9 +100,14 @@ public final class NpcDebugNetworking {
         if (brain.seekingChest) return "looting chest";
         if (brain.depositing) return "depositing";
         if (brain.seekingCraftingTable) return "crafting";
+        if (brain.processingFurnace) return "smelting";
         if (brain.gatheringResource) return "gathering";
         if (brain.seekingBed) return "seeking bed";
         if (brain.target != null) return "combat";
+        if (brain.plan.shouldGather()) return "searching resources";
+        if (brain.plan.action() == SurvivalPlanner.Action.HAND_CRAFT) return "hand crafting";
+        if (brain.plan.action() == SurvivalPlanner.Action.CRAFTING_TABLE) return "seeking crafting table";
+        if (brain.plan.action() == SurvivalPlanner.Action.FURNACE) return "seeking furnace";
         if (brain.wanderTarget != null) return "wandering";
         return "idle";
     }
@@ -113,7 +121,9 @@ public final class NpcDebugNetworking {
         if (brain.seekingChest) flags.add("chest");
         if (brain.depositing) flags.add("store");
         if (brain.seekingCraftingTable) flags.add("craft");
+        if (brain.processingFurnace) flags.add("smelt");
         if (brain.gatheringResource) flags.add("gather");
+        if (brain.plan.shouldGather() && !brain.gatheringResource) flags.add("resource-search");
         return flags.isEmpty() ? "none" : String.join(", ", flags);
     }
 

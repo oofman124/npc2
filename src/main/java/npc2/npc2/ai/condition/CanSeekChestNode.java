@@ -29,6 +29,7 @@ public class CanSeekChestNode extends ConditionNode {
                 && !this.brain.depositing
                 && !this.brain.gatheringResource
                 && !this.brain.seekingCraftingTable
+                && !this.brain.processingFurnace
                 && !this.brain.npc.isSleeping()
                 && !combatTooClose;
         if (!allowed) {

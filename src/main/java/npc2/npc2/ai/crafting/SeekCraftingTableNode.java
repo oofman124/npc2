@@ -4,14 +4,11 @@ import io.github.oofman124.asterisk.Context;
 import io.github.oofman124.asterisk.nodes.ExecutableNode;
 import io.github.oofman124.asterisk.ports.SignalPort;
 import io.github.oofman124.asterisk.ports.SignalPortMode;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.Vec3;
 import npc2.npc2.ai.NpcBrain;
+import npc2.npc2.ai.interaction.BlockInteractionStations;
+import npc2.npc2.ai.interaction.CarriedStationPlacement;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
@@ -36,7 +33,8 @@ public class SeekCraftingTableNode extends ExecutableNode {
     protected void onExecute(Context context) {
         if (context != null && context.get("Brain") instanceof NpcBrain brain) {
             if (!this.searchPhaseInitialized) {
-                this.searchCooldown = Math.floorMod(brain.npc.getId(), SEARCH_INTERVAL);
+                // Do not leave a fresh crafting plan waiting behind a randomized initial delay.
+                this.searchCooldown = 0;
                 this.searchPhaseInitialized = true;
             }
             if (brain.craftingTableTarget != null && !CraftingStations.isUsable(brain.npc, brain.craftingTableTarget)) {
@@ -45,7 +43,11 @@ public class SeekCraftingTableNode extends ExecutableNode {
             if (brain.craftingTableTarget == null && this.searchCooldown-- <= 0) {
                 this.searchCooldown = SEARCH_INTERVAL;
                 CraftingStations.Target candidate = CraftingStations.findTarget(brain.npc, this.radius);
-                if (candidate == null) candidate = placeCarriedTable(brain);
+                if (candidate == null) {
+                    BlockInteractionStations.Target placed = CarriedStationPlacement.place(
+                            brain, Items.CRAFTING_TABLE, BlockInteractionStations.Kind.CRAFTING_TABLE);
+                    if (placed != null) candidate = CraftingStations.fromShared(placed);
+                }
                 if (candidate != null && CraftingStations.claim(brain.npc, candidate)) {
                     brain.craftingTableTarget = candidate;
                     brain.seekingCraftingTable = true;
@@ -83,32 +85,5 @@ public class SeekCraftingTableNode extends ExecutableNode {
         CraftingStations.release(brain.npc);
         brain.craftingTableTarget = null;
         brain.seekingCraftingTable = false;
-    }
-
-    /** Place a carried table beside the NPC when no world workstation is reachable. */
-    private static CraftingStations.Target placeCarriedTable(NpcBrain brain) {
-        SimpleContainer bag = brain.npc.getInventory();
-        int tableSlot = -1;
-        for (int slot = 0; slot < bag.getContainerSize(); slot++) {
-            if (bag.getItem(slot).is(Items.CRAFTING_TABLE)) {
-                tableSlot = slot;
-                break;
-            }
-        }
-        if (tableSlot < 0) return null;
-
-        for (Direction direction : Direction.Plane.HORIZONTAL) {
-            BlockPos placeAt = brain.npc.blockPosition().relative(direction);
-            if (!brain.npc.level().getBlockState(placeAt).isAir()
-                    || brain.npc.level().getBlockState(placeAt.below()).isAir()) continue;
-            ItemStack previousHand = brain.npc.getMainHandItem();
-            brain.npc.setItemInHand(InteractionHand.MAIN_HAND, bag.getItem(tableSlot));
-            boolean placed = brain.controller.placeBlockOnTop(brain.npc, placeAt.below());
-            ItemStack remaining = brain.npc.getMainHandItem();
-            brain.npc.setItemInHand(InteractionHand.MAIN_HAND, previousHand);
-            bag.setItem(tableSlot, remaining);
-            if (placed) return new CraftingStations.Target(placeAt.immutable(), brain.npc.position());
-        }
-        return null;
     }
 }

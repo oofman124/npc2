@@ -54,8 +54,12 @@ import npc2.npc2.ai.crafting.SeekCraftingTableNode;
 import npc2.npc2.ai.condition.CanGatherResourcesNode;
 import npc2.npc2.ai.condition.CanDepositItemsNode;
 import npc2.npc2.ai.condition.CanUseCraftingTableNode;
+import npc2.npc2.ai.condition.CanUseFurnaceNode;
 import npc2.npc2.ai.inventory.ManageInventoryNode;
 import npc2.npc2.ai.interaction.TerrainAssistNode;
+import npc2.npc2.ai.interaction.BlockInteractionStations;
+import npc2.npc2.ai.processing.UseFurnaceNode;
+import npc2.npc2.ai.survival.SurvivalPlanner;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -106,13 +110,14 @@ public class NpcBrain {
     public final DepositItemsNode depositItemsNode;
     public final CanUseCraftingTableNode canUseCraftingTableNode;
     public final SeekCraftingTableNode seekCraftingTableNode;
+    public final CanUseFurnaceNode canUseFurnaceNode;
+    public final UseFurnaceNode useFurnaceNode;
     public final FocusTargetNode focusTargetNode;
     public final ChaseTargetNode chaseTargetNode;
     public final TargetRangeNode targetRangeNode;
     public final DebounceNode attackDebounceNode;
     public final AttackTargetNode attackTargetNode;
     public final WanderNode wanderNode;
-    public final DebounceNode wanderDebounceNode;
     public final IdleNode idleNode;
 
     public @Nullable LivingEntity target;
@@ -138,11 +143,15 @@ public class NpcBrain {
     public BlockResourceGathering.@Nullable Target resourceTarget;
     public ChestLooting.@Nullable Target chestDepositTarget;
     public CraftingStations.@Nullable Target craftingTableTarget;
+    public BlockInteractionStations.@Nullable Target furnaceTarget;
+    public boolean processingFurnace;
+    public SurvivalPlanner.Plan plan;
 
     public NpcBrain(FakeNpcEntity npc, @Nullable Graph graph) {
         this.graph = (graph != null) ? graph : new Graph("NpcBrain");
         this.npc = npc;
         this.controller = npc.getController();
+        this.plan = SurvivalPlanner.create(npc, this.controller);
 
         Map<String, Object> map = new HashMap<>();
         map.put("Npc", npc);
@@ -192,12 +201,13 @@ public class NpcBrain {
         this.depositItemsNode = new DepositItemsNode("DepositItems", 32.0D);
         this.canUseCraftingTableNode = new CanUseCraftingTableNode("CanUseCraftingTable", this);
         this.seekCraftingTableNode = new SeekCraftingTableNode("SeekCraftingTable", 24);
+        this.canUseFurnaceNode = new CanUseFurnaceNode("CanUseFurnace", this);
+        this.useFurnaceNode = new UseFurnaceNode("UseFurnace", 24);
         this.focusTargetNode = new FocusTargetNode("FocusTarget");
         this.chaseTargetNode = new ChaseTargetNode("ChaseTarget", 0.25D);
         this.targetRangeNode = new TargetRangeNode("TargetRange", this, 2.25D);
         this.attackDebounceNode = new DebounceNode("AttackDebounce", 12);
         this.attackTargetNode = new AttackTargetNode("AttackTarget");
-        this.wanderDebounceNode = new DebounceNode("WanderDebounce", 60);
         this.wanderNode = new WanderNode("Wander", new Vec3(30, 30, 30));
         this.idleNode = new IdleNode("Idle", 8.0D);
 
@@ -238,12 +248,13 @@ public class NpcBrain {
         this.graph.addNode(this.depositItemsNode);
         this.graph.addNode(this.canUseCraftingTableNode);
         this.graph.addNode(this.seekCraftingTableNode);
+        this.graph.addNode(this.canUseFurnaceNode);
+        this.graph.addNode(this.useFurnaceNode);
         this.graph.addNode(this.focusTargetNode);
         this.graph.addNode(this.chaseTargetNode);
         this.graph.addNode(this.targetRangeNode);
         this.graph.addNode(this.attackDebounceNode);
         this.graph.addNode(this.attackTargetNode);
-        this.graph.addNode(this.wanderDebounceNode);
         this.graph.addNode(this.wanderNode);
         this.graph.addNode(this.idleNode);
 
@@ -296,6 +307,9 @@ public class NpcBrain {
         this.graph.connectSignals(this.blockMobNode.getId(), "Out", this.canUseCraftingTableNode.getId(), "In");
         this.graph.connectSignals(this.canUseCraftingTableNode.getId(), "Out", this.seekCraftingTableNode.getId(), "In");
 
+        this.graph.connectSignals(this.blockMobNode.getId(), "Out", this.canUseFurnaceNode.getId(), "In");
+        this.graph.connectSignals(this.canUseFurnaceNode.getId(), "Out", this.useFurnaceNode.getId(), "In");
+
         this.graph.connectSignals(this.blockMobNode.getId(), "Out", this.canGatherResourcesNode.getId(), "In");
         this.graph.connectSignals(this.canGatherResourcesNode.getId(), "Out", this.gatherResourcesNode.getId(), "In");
 
@@ -306,12 +320,22 @@ public class NpcBrain {
         this.graph.connectSignals(this.terrainAssistanceNeededNode.getId(), "Out", this.terrainAssistNode.getId(), "In");
 
         // Idle behaviors run off sensing every tick
-        this.graph.connectSignals(this.senseEntitiesNode.getId(), "Out", this.wanderDebounceNode.getId(), "In");
-        this.graph.connectSignals(this.wanderDebounceNode.getId(), "Out", this.wanderNode.getId(), "In");
+        this.graph.connectSignals(this.senseEntitiesNode.getId(), "Out", this.wanderNode.getId(), "In");
         this.graph.connectSignals(this.senseEntitiesNode.getId(), "Out", this.idleNode.getId(), "In");
     }
 
     public void Tick() {
+        this.plan = SurvivalPlanner.create(this.npc, this.controller);
         this.graph.fireGlobalEventNode("Tick");
+    }
+
+    /** True while the planner still expects the NPC to gather or produce something. */
+    public boolean hasPlannedWork() {
+        return this.plan.shouldGather() || this.plan.action() != SurvivalPlanner.Action.NONE;
+    }
+
+    /** Crafting/smelting plans should not be displaced by ordinary wandering. */
+    public boolean hasProductionPlan() {
+        return !this.plan.shouldGather() && this.plan.action() != SurvivalPlanner.Action.NONE;
     }
 }

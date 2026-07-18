@@ -1,0 +1,40 @@
+name: Java CI with Gradle
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Step 1: Checkout parent repo AND its submodules
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: true
+
+    # Step 2: Set up Java environment
+    - name: Set up JDK 25
+      uses: actions/setup-java@v4
+      with:
+        java-version: '25'
+        distribution: 'temurin'
+
+    # Step 3: Set up Gradle
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+
+    # Step 4: Run your Gradle tasks
+    - name: Build with Gradle
+      run: ./gradlew build
+
+    # Step 5: Upload the generated JAR files so you can download them
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: gradle-build-artifacts
+        path: build/libs/

@@ -1,0 +1,37 @@
+{
+	"schemaVersion": 1,
+	"id": "npc2",
+	"version": "${version}",
+	"name": "npc2",
+	"description": "Autonomous survival NPCs with combat, looting, crafting, gathering, sleeping, and pathfinding.",
+	"authors": [
+		"Me!"
+	],
+	"license": "CC0-1.0",
+	"icon": "assets/npc2/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"npc2.npc2.Npc2"
+		],
+		"client": [
+			"npc2.npc2.client.Npc2Client"
+		],
+		"fabric-datagen": [
+			"npc2.npc2.client.Npc2DataGenerator"
+		]
+	},
+	"mixins": [
+		"npc2.mixins.json",
+		{
+			"config": "npc2.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~26.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

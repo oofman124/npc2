@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "npc2:item/fake_npc_spawn_egg"
+  }
+}

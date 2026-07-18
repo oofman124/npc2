@@ -1,0 +1,4 @@
+[submodule "modules/asterisk"]
+	path = modules/asterisk
+	url = https://github.com/oofman124/asterisk
+	branch = main

@@ -37,7 +37,8 @@ public class ChaseTargetNode extends ExecutableNode {
             brain.targetInRange = distanceSqr <= 4.0D;
 
             if (brain.blockingMob || brain.retreating || brain.seekingLoot || brain.seekingChest || brain.seekingBed
-                    || brain.depositing || brain.gatheringResource || brain.seekingCraftingTable || npc.isSleeping()) {
+                    || brain.depositing || brain.gatheringResource || brain.seekingCraftingTable
+                    || brain.processingFurnace || npc.isSleeping()) {
                 this.outPort.fire(context);
                 return;
             }

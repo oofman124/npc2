@@ -49,8 +49,9 @@ import npc2.npc2.ai.movement.LootReservations;
 import npc2.npc2.ai.movement.ChestLooting;
 import npc2.npc2.ai.rest.BedReservations;
 import npc2.npc2.ai.movement.BlockResourceGathering;
-import npc2.npc2.ai.crafting.CraftingStations;
+import npc2.npc2.ai.interaction.BlockInteractionStations;
 import npc2.npc2.ai.survival.SurvivalNeeds;
+import npc2.npc2.ai.survival.SurvivalPlanner;
 
 import java.util.List;
 import java.util.Comparator;
@@ -67,7 +68,7 @@ public interface NpcController {
         ChestLooting.release(npc);
         BedReservations.release(npc);
         BlockResourceGathering.release(npc);
-        CraftingStations.release(npc);
+        BlockInteractionStations.releaseAll(npc);
     }
 
     /** Called every server tick this NPC is active. This is your behavior tree's root tick. */
@@ -80,11 +81,11 @@ public interface NpcController {
      * final destination. A failed path is stopped rather than replaced with direct,
      * collision-ignoring movement.
      */
-    default void moveTo(FakeNpcEntity npc, Vec3 target, double speed) {
+    default boolean moveTo(FakeNpcEntity npc, Vec3 target, double speed) {
         if (!npc.getNpcNavigation().moveTo(target, speed)) {
             // Cancel the failed route without erasing collision pushes or knockback.
             npc.getNpcNavigation().stop();
-            return;
+            return false;
         }
 
         Path path = npc.getNpcNavigation().getPath();
@@ -93,11 +94,12 @@ public interface NpcController {
                 : target;
         Vec3 facingTarget = new Vec3(nextPosition.x, npc.getEyeY(), nextPosition.z);
         lookAt(npc, facingTarget);
+        return true;
     }
 
     /** Path toward an entity using vanilla ground pathfinding. */
-    default void moveTo(FakeNpcEntity npc, Entity target, double speed) {
-        moveTo(npc, target.position(), speed);
+    default boolean moveTo(FakeNpcEntity npc, Entity target, double speed) {
+        return moveTo(npc, target.position(), speed);
     }
 
     /**
@@ -833,6 +835,13 @@ public interface NpcController {
         }
         if (stack.is(Items.IRON_INGOT) && bag.countItem(Items.IRON_INGOT) < 16) {
             return 4.5D;
+        }
+        SurvivalPlanner.Plan plan = SurvivalNeeds.planFor(npc, this);
+        if (stack.is(Items.RAW_IRON) && plan.score(SurvivalPlanner.Resource.IRON_ORE) > 0.0D) {
+            return 6.0D + plan.score(SurvivalPlanner.Resource.IRON_ORE) * 0.1D;
+        }
+        if (stack.is(Items.DIAMOND) && plan.score(SurvivalPlanner.Resource.DIAMOND) > 0.0D) {
+            return 12.0D + plan.score(SurvivalPlanner.Resource.DIAMOND) * 0.1D;
         }
 
         if (isWeapon(stack)) {

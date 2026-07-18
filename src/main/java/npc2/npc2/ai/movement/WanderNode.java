@@ -4,7 +4,7 @@ import io.github.oofman124.asterisk.Context;
 import io.github.oofman124.asterisk.nodes.ExecutableNode;
 import io.github.oofman124.asterisk.ports.SignalPort;
 import io.github.oofman124.asterisk.ports.SignalPortMode;
-import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.ai.util.LandRandomPos;
 import net.minecraft.world.phys.Vec3;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.NpcController;
@@ -14,8 +14,13 @@ import org.jspecify.annotations.Nullable;
 
 @NullMarked
 public class WanderNode extends ExecutableNode {
+    private static final int WANDER_INTERVAL = 60;
+    private static final int RETRY_INTERVAL = 20;
+    private static final double ARRIVAL_DISTANCE_SQR = 2.25D;
+
     public Vec3 bounds = new Vec3(5, 5, 5);
     public final SignalPort outPort;
+    private int cooldown;
 
     public WanderNode(String id, @Nullable Vec3 bounds) {
         super(id);
@@ -35,38 +40,71 @@ public class WanderNode extends ExecutableNode {
         if (context.get("Npc") instanceof FakeNpcEntity npc &&
             context.get("Controller") instanceof NpcController controller) {
             NpcBrain brain = (context.get("Brain") instanceof NpcBrain storedBrain) ? storedBrain : null;
+            boolean productionPlanned = brain != null && brain.hasProductionPlan();
             if (brain != null && (brain.target != null || brain.blockingMob || brain.floating || brain.seekingLoot
                     || brain.seekingChest || brain.seekingBed || brain.depositing || brain.gatheringResource
-                    || brain.seekingCraftingTable || npc.isSleeping())) {
+                    || brain.seekingCraftingTable || brain.processingFurnace || productionPlanned || npc.isSleeping())) {
+                brain.wanderTarget = null;
                 this.outPort.fire(context);
                 return;
             }
 
             if (brain != null && brain.wanderTarget != null) {
-                if (npc.getNpcNavigation().shouldAbandonTarget()) {
+                boolean arrived = npc.distanceToSqr(brain.wanderTarget) <= ARRIVAL_DISTANCE_SQR;
+                boolean routeFailed = npc.getNpcNavigation().shouldAbandonTarget()
+                        || (npc.getNpcNavigation().isDone() && !arrived);
+                if (routeFailed) {
                     brain.wanderTarget = null;
                     npc.getNpcNavigation().markTargetAbandoned();
-                } else if (npc.distanceToSqr(brain.wanderTarget) <= 1.0D) {
+                    this.cooldown = RETRY_INTERVAL;
+                } else if (arrived) {
                     brain.wanderTarget = null;
+                    controller.stopMoving(npc);
+                    this.cooldown = WANDER_INTERVAL;
                 } else {
-                    controller.moveTo(npc, brain.wanderTarget, 0.22D);
+                    boolean moving = controller.moveTo(npc, brain.wanderTarget, 0.22D);
+                    if (!moving || !npc.getNpcNavigation().pathActuallyReachesTarget()) {
+                        brain.wanderTarget = null;
+                        npc.getNpcNavigation().markTargetAbandoned();
+                        this.cooldown = RETRY_INTERVAL;
+                    }
                     this.outPort.fire(context);
                     return;
                 }
             }
 
-            RandomSource random = npc.level().getRandom();
-            Vec3 position = npc.position();
-
-            double offsetX = (random.nextDouble() * 2.0 - 1.0) * bounds.x;
-            double offsetZ = (random.nextDouble() * 2.0 - 1.0) * bounds.z;
-
-            Vec3 target = position.add(offsetX, 0.0, offsetZ);
-            if (brain != null) {
-                brain.wanderTarget = target;
+            if (this.cooldown > 0) {
+                this.cooldown--;
+                this.outPort.fire(context);
+                return;
             }
-            controller.moveTo(npc, target, 0.22D);
+
+            Vec3 target = findReachableTarget(npc);
+            this.cooldown = target == null ? RETRY_INTERVAL : WANDER_INTERVAL;
+            if (brain != null && target != null) {
+                brain.wanderTarget = target;
+                if (!controller.moveTo(npc, target, 0.22D)
+                        || !npc.getNpcNavigation().pathActuallyReachesTarget()) {
+                    brain.wanderTarget = null;
+                    npc.getNpcNavigation().markTargetAbandoned();
+                    this.cooldown = RETRY_INTERVAL;
+                }
+            }
         }
         this.outPort.fire(context);
+    }
+
+    private Vec3 findReachableTarget(FakeNpcEntity npc) {
+        int horizontalRange = Math.max(4, (int)Math.ceil(Math.max(this.bounds.x, this.bounds.z)));
+        int verticalRange = Math.max(2, Math.min(8, (int)Math.ceil(this.bounds.y)));
+        for (int attempt = 0; attempt < 6; attempt++) {
+            Vec3 candidate = LandRandomPos.getPos(npc, horizontalRange, verticalRange);
+            if (candidate != null
+                    && npc.distanceToSqr(candidate) > 4.0D
+                    && npc.getNpcNavigation().canReach(net.minecraft.core.BlockPos.containing(candidate))) {
+                return candidate;
+            }
+        }
+        return null;
     }
 }

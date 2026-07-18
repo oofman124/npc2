@@ -5,9 +5,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
-import net.minecraft.tags.ItemTags;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -15,6 +12,8 @@ import net.minecraft.world.phys.Vec3;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.NpcController;
 import npc2.npc2.ai.survival.SurvivalNeeds;
+import npc2.npc2.ai.survival.SurvivalPlanner;
+import npc2.npc2.ai.crafting.ToolProgression;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -39,7 +38,8 @@ public final class BlockResourceGathering {
         ServerLevel level = (ServerLevel)npc.level();
         prune(level);
         BlockPos origin = npc.blockPosition();
-        EnumMap<Kind, Double> priorities = priorities(npc, controller);
+        SurvivalPlanner.Plan plan = SurvivalNeeds.planFor(npc, controller);
+        EnumMap<Kind, Double> priorities = priorities(npc, plan);
         PriorityQueue<Candidate> shortlist = new PriorityQueue<>(
                 Comparator.comparingDouble(Candidate::value));
 
@@ -69,7 +69,7 @@ public final class BlockResourceGathering {
     }
 
     public static boolean needsResources(FakeNpcEntity npc, NpcController controller) {
-        return SurvivalNeeds.materials(npc, controller) > 0.0D;
+        return SurvivalNeeds.planFor(npc, controller).shouldGather();
     }
 
     public static boolean claim(FakeNpcEntity npc, Target target) {
@@ -86,7 +86,8 @@ public final class BlockResourceGathering {
     public static boolean isUsable(FakeNpcEntity npc, NpcController controller, Target target) {
         return target.kind.canGather(npc)
                 && target.kind.matches(npc.level().getBlockState(target.blockPos), target.blockPos, npc)
-                && target.kind.priority(npc, controller) > 0.0D && isAvailable(npc, target.blockPos);
+                && SurvivalNeeds.planFor(npc, controller).score(target.kind.resource) > 0.0D
+                && isAvailable(npc, target.blockPos);
     }
 
     public static void release(FakeNpcEntity npc) {
@@ -100,10 +101,10 @@ public final class BlockResourceGathering {
         AVOID_UNTIL.put(new AvoidKey(npc.getUUID(), level.dimension(), target.blockPos), level.getGameTime() + ticks);
     }
 
-    private static EnumMap<Kind, Double> priorities(FakeNpcEntity npc, NpcController controller) {
+    private static EnumMap<Kind, Double> priorities(FakeNpcEntity npc, SurvivalPlanner.Plan plan) {
         EnumMap<Kind, Double> priorities = new EnumMap<>(Kind.class);
         for (Kind kind : Kind.values()) {
-            priorities.put(kind, kind.canGather(npc) ? kind.priority(npc, controller) : 0.0D);
+            priorities.put(kind, kind.canGather(npc) ? plan.score(kind.resource) : 0.0D);
         }
         return priorities;
     }
@@ -124,20 +125,14 @@ public final class BlockResourceGathering {
 
     private static boolean hasOpenApproach(FakeNpcEntity npc, BlockPos resource) {
         for (Direction direction : Direction.Plane.HORIZONTAL) {
-            BlockPos approach = resource.relative(direction);
-            if (npc.level().getBlockState(approach).isAir()
-                    && npc.level().getBlockState(approach.above()).isAir()) return true;
+            BlockPos beside = resource.relative(direction);
+            if (isOpenApproach(npc, beside) || isOpenApproach(npc, beside.above())) return true;
         }
         return false;
     }
 
     private static @Nullable Vec3 findApproach(FakeNpcEntity npc, BlockPos resource) {
-        List<BlockPos> approaches = new ArrayList<>(4);
-        for (Direction direction : Direction.Plane.HORIZONTAL) {
-            BlockPos candidate = resource.relative(direction);
-            if (npc.level().getBlockState(candidate).isAir()
-                    && npc.level().getBlockState(candidate.above()).isAir()) approaches.add(candidate);
-        }
+        List<BlockPos> approaches = findOpenApproaches(npc, resource);
         approaches.sort(Comparator.comparingDouble(pos -> pos.distSqr(npc.blockPosition())));
         for (BlockPos approach : approaches) {
             if (npc.getNpcNavigation().canReach(approach)) return Vec3.atBottomCenterOf(approach);
@@ -145,10 +140,27 @@ public final class BlockResourceGathering {
         return null;
     }
 
-    private static boolean hasPickaxe(FakeNpcEntity npc) {
-        if (npc.getMainHandItem().is(ItemTags.PICKAXES)) return true;
-        for (ItemStack stack : npc.getInventory()) if (stack.is(ItemTags.PICKAXES)) return true;
-        return false;
+    /** Supports both wall resources and floor resources approached from atop an adjacent block. */
+    private static List<BlockPos> findOpenApproaches(FakeNpcEntity npc, BlockPos resource) {
+        List<BlockPos> approaches = new ArrayList<>(8);
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            BlockPos beside = resource.relative(direction);
+            addIfOpen(npc, approaches, beside);
+            addIfOpen(npc, approaches, beside.above());
+        }
+        return approaches;
+    }
+
+    private static void addIfOpen(FakeNpcEntity npc, List<BlockPos> approaches, BlockPos candidate) {
+        if (isOpenApproach(npc, candidate) && !approaches.contains(candidate)) {
+            approaches.add(candidate.immutable());
+        }
+    }
+
+    private static boolean isOpenApproach(FakeNpcEntity npc, BlockPos candidate) {
+        return npc.level().getBlockState(candidate).isAir()
+                && npc.level().getBlockState(candidate.above()).isAir()
+                && !npc.level().getBlockState(candidate.below()).isAir();
     }
 
     private static boolean isAvailable(FakeNpcEntity npc, BlockPos pos) {
@@ -168,60 +180,52 @@ public final class BlockResourceGathering {
     }
 
     public enum Kind {
-        WOOD {
+        WOOD(SurvivalPlanner.Resource.LOGS, ToolProgression.NONE) {
             boolean matches(BlockState state, BlockPos pos, FakeNpcEntity npc) {
                 BlockState below = npc.level().getBlockState(pos.below());
                 return state.is(BlockTags.LOGS) && !below.is(BlockTags.LOGS)
                         && !below.is(BlockTags.LEAVES) && !below.isAir();
             }
-            double priority(FakeNpcEntity npc, NpcController controller) {
-                int count = controller.countInventoryTag(npc.getInventory(), ItemTags.LOGS);
-                return Math.max(0, SurvivalNeeds.LOG_TARGET - count) * 45.0D / SurvivalNeeds.LOG_TARGET;
-            }
         },
-        STONE {
+        STONE(SurvivalPlanner.Resource.COBBLESTONE, ToolProgression.WOOD) {
             boolean matches(BlockState state, BlockPos pos, FakeNpcEntity npc) {
                 return state.is(Blocks.STONE) || state.is(Blocks.COBBLESTONE);
             }
-            double priority(FakeNpcEntity npc, NpcController controller) {
-                int count = npc.getInventory().countItem(Items.COBBLESTONE);
-                return Math.max(0, SurvivalNeeds.COBBLESTONE_TARGET - count) * 40.0D / SurvivalNeeds.COBBLESTONE_TARGET;
-            }
-            boolean requiresPickaxe() {
-                return true;
-            }
         },
-        FUEL {
+        FUEL(SurvivalPlanner.Resource.FUEL, ToolProgression.WOOD) {
             boolean matches(BlockState state, BlockPos pos, FakeNpcEntity npc) {
                 return state.is(Blocks.COAL_ORE) || state.is(Blocks.DEEPSLATE_COAL_ORE);
             }
-            double priority(FakeNpcEntity npc, NpcController controller) {
-                int count = SurvivalNeeds.countFuel(npc.getInventory());
-                return Math.max(0, SurvivalNeeds.FUEL_TARGET - count) * 32.0D / SurvivalNeeds.FUEL_TARGET;
-            }
-            boolean requiresPickaxe() {
-                return true;
+        },
+        IRON(SurvivalPlanner.Resource.IRON_ORE, ToolProgression.STONE) {
+            boolean matches(BlockState state, BlockPos pos, FakeNpcEntity npc) {
+                return state.is(Blocks.IRON_ORE) || state.is(Blocks.DEEPSLATE_IRON_ORE);
             }
         },
-        SOIL {
+        DIAMOND(SurvivalPlanner.Resource.DIAMOND, ToolProgression.IRON) {
+            boolean matches(BlockState state, BlockPos pos, FakeNpcEntity npc) {
+                return state.is(Blocks.DIAMOND_ORE) || state.is(Blocks.DEEPSLATE_DIAMOND_ORE);
+            }
+        },
+        SOIL(SurvivalPlanner.Resource.SOIL, ToolProgression.NONE) {
             boolean matches(BlockState state, BlockPos pos, FakeNpcEntity npc) {
                 return state.is(BlockTags.DIRT);
             }
-            double priority(FakeNpcEntity npc, NpcController controller) {
-                int count = npc.getInventory().countItem(Items.DIRT);
-                return Math.max(0, SurvivalNeeds.SOIL_TARGET - count) * 24.0D / SurvivalNeeds.SOIL_TARGET;
-            }
         };
 
-        abstract boolean matches(BlockState state, BlockPos pos, FakeNpcEntity npc);
-        abstract double priority(FakeNpcEntity npc, NpcController controller);
+        private final SurvivalPlanner.Resource resource;
+        private final int requiredPickaxeTier;
 
-        boolean requiresPickaxe() {
-            return false;
+        Kind(SurvivalPlanner.Resource resource, int requiredPickaxeTier) {
+            this.resource = resource;
+            this.requiredPickaxeTier = requiredPickaxeTier;
         }
 
+        abstract boolean matches(BlockState state, BlockPos pos, FakeNpcEntity npc);
+
         boolean canGather(FakeNpcEntity npc) {
-            return !requiresPickaxe() || hasPickaxe(npc);
+            return this.requiredPickaxeTier == ToolProgression.NONE
+                    || ToolProgression.pickaxeTier(npc) >= this.requiredPickaxeTier;
         }
     }
 

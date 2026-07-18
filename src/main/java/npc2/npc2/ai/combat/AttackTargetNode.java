@@ -39,6 +39,7 @@ public class AttackTargetNode extends ExecutableNode {
             !brain.depositing &&
             !brain.gatheringResource &&
             !brain.seekingCraftingTable &&
+            !brain.processingFurnace &&
             !npc.isSleeping() &&
             target.isAlive()) {
             controller.attackEntity(npc, target);

@@ -37,6 +37,7 @@ public class FocusTargetNode extends ExecutableNode {
             !brain.depositing &&
             !brain.gatheringResource &&
             !brain.seekingCraftingTable &&
+            !brain.processingFurnace &&
             !npc.isSleeping() &&
             brain.target instanceof LivingEntity target &&
             target.isAlive()) {

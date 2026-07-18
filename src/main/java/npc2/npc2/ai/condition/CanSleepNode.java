@@ -29,7 +29,8 @@ public class CanSleepNode extends ConditionNode {
                 && !this.brain.seekingChest
                 && !this.brain.depositing
                 && !this.brain.gatheringResource
-                && !this.brain.seekingCraftingTable;
+                && !this.brain.seekingCraftingTable
+                && !this.brain.processingFurnace;
 
         if (!allowed && !this.brain.npc.isSleeping()) {
             BedReservations.release(this.brain.npc);

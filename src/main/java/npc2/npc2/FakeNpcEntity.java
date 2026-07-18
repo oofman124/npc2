@@ -197,6 +197,7 @@ public class FakeNpcEntity extends PathfinderMob {
 	@Override
 	protected void customServerAiStep(ServerLevel level) {
 		super.customServerAiStep(level);
+		this.navigation.tick();
 		if (this.controller != null) {
 			this.controller.tick(this);
 		}

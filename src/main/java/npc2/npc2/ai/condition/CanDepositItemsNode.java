@@ -21,6 +21,7 @@ public class CanDepositItemsNode extends ConditionNode {
         boolean safe = this.brain.target == null && !this.brain.blockingMob && !this.brain.retreating
                 && !this.brain.floating && !this.brain.seekingLoot && !this.brain.seekingChest
                 && !this.brain.seekingBed && !this.brain.seekingCraftingTable && !this.brain.gatheringResource
+                && !this.brain.processingFurnace
                 && !this.brain.npc.isSleeping();
         if (!safe || !ChestLooting.hasItemsToDeposit(this.brain.npc, this.brain.controller)) {
             if (!this.brain.seekingChest) ChestLooting.release(this.brain.npc);

@@ -1,5 +1,7 @@
 # NPC2
 
+### **Run `/give @s npc2:fake_npc_spawn_egg` to get the spawn egg!!!!!!!!!**
+
 NPC2 is an experimental Fabric mod for autonomous survival NPCs. The NPCs use vanilla
 mob navigation and physics while a node-based AI coordinates combat and everyday tasks.
 
@@ -10,6 +12,7 @@ Current behaviors include:
 - Food management, healing, resource gathering, tree cutting, and chest stockpiling.
 - Basic and crafting-table recipes with situation-aware tool switching.
 - Door opening, swimming, terrain assistance, camp preparation, and sleeping.
+
 
 ## Debug HUD
 

@@ -39,8 +39,9 @@ dependencies {
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-	// Bind your core engine right into the mod!
-	implementation "io.github.oofman124:asterisk:1.0-SNAPSHOT"
+
+	implementation project(':asterisk')
+	include project(':asterisk')
 
 }
 

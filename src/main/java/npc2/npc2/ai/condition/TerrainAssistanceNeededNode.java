@@ -8,7 +8,6 @@ import org.jspecify.annotations.NullMarked;
 public class TerrainAssistanceNeededNode extends ConditionNode {
     private static final int CHECK_INTERVAL = 10;
     private final NpcBrain brain;
-    private int ticks;
 
     public TerrainAssistanceNeededNode(String id, NpcBrain brain) {
         super(id);
@@ -17,13 +16,13 @@ public class TerrainAssistanceNeededNode extends ConditionNode {
 
     @Override
     protected boolean evaluateCondition() {
-        if (++this.ticks < CHECK_INTERVAL) {
+        if (++this.brain.memories.terrainAssistanceTicks < CHECK_INTERVAL) {
             return false;
         }
-        this.ticks = 0;
+        this.brain.memories.terrainAssistanceTicks = 0;
         return this.brain.npc.getNpcNavigation().needsRecovery()
-                && !this.brain.blockingMob
-                && !this.brain.retreating
+                && !this.brain.memories.blockingMob
+                && !this.brain.memories.retreating
                 && !this.brain.npc.isSleeping();
     }
 }

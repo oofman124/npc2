@@ -17,7 +17,6 @@ public class UseFurnaceNode extends ExecutableNode {
     private static final double ARRIVAL_DISTANCE_SQR = 2.25D;
     private static final int SEARCH_INTERVAL = 40;
     private final int radius;
-    private int searchCooldown;
     public final SignalPort outPort;
 
     public UseFurnaceNode(String id, int radius) {
@@ -30,10 +29,10 @@ public class UseFurnaceNode extends ExecutableNode {
     @Override
     protected void onExecute(Context context) {
         if (context != null && context.get("Brain") instanceof NpcBrain brain) {
-            if (brain.furnaceTarget != null
-                    && !BlockInteractionStations.isUsable(brain.npc, brain.furnaceTarget)) clear(brain);
-            if (brain.furnaceTarget == null && this.searchCooldown-- <= 0) {
-                this.searchCooldown = SEARCH_INTERVAL;
+            if (brain.memories.furnaceTarget != null
+                    && !BlockInteractionStations.isUsable(brain.npc, brain.memories.furnaceTarget)) clear(brain);
+            if (brain.memories.furnaceTarget == null && brain.memories.furnaceSearchCooldown-- <= 0) {
+                brain.memories.furnaceSearchCooldown = SEARCH_INTERVAL;
                 BlockInteractionStations.Target candidate = BlockInteractionStations.findTarget(
                         brain.npc, BlockInteractionStations.Kind.FURNACE, this.radius);
                 if (candidate == null) {
@@ -41,29 +40,40 @@ public class UseFurnaceNode extends ExecutableNode {
                             brain, Items.FURNACE, BlockInteractionStations.Kind.FURNACE);
                 }
                 if (candidate != null && BlockInteractionStations.claim(brain.npc, candidate)) {
-                    brain.furnaceTarget = candidate;
-                    brain.processingFurnace = true;
+                    brain.memories.furnaceTarget = candidate;
+                    brain.memories.processingFurnace = true;
+                } else if (candidate == null) {
+                    clear(brain);
+                    brain.memories.furnaceSearchCooldown = 0;
                 }
             }
 
-            if (brain.furnaceTarget != null) {
+            if (brain.memories.furnaceTarget != null) {
                 if (brain.npc.getNpcNavigation().shouldAbandonTarget()) {
                     clear(brain);
                     brain.npc.getNpcNavigation().markTargetAbandoned();
-                    this.searchCooldown = SEARCH_INTERVAL;
+                    brain.memories.furnaceSearchCooldown = SEARCH_INTERVAL;
                     this.outPort.fire(context);
                     return;
                 }
-                if (brain.npc.distanceToSqr(brain.furnaceTarget.approachPosition()) > ARRIVAL_DISTANCE_SQR) {
-                    brain.controller.moveTo(brain.npc, brain.furnaceTarget.approachPosition(), 0.24D);
-                } else if (brain.npc.level().getBlockEntity(brain.furnaceTarget.blockPos())
+                if (brain.npc.distanceToSqr(brain.memories.furnaceTarget.approachPosition()) > ARRIVAL_DISTANCE_SQR) {
+                    if (!brain.controller.moveTo(brain.npc, brain.memories.furnaceTarget.approachPosition(), 0.24D)) {
+                        BlockInteractionStations.forget(brain.npc, BlockInteractionStations.Kind.FURNACE);
+                        brain.memories.furnaceTarget = null;
+                        brain.memories.processingFurnace = false;
+                        brain.npc.getNpcNavigation().markTargetAbandoned();
+                        brain.memories.furnaceSearchCooldown = 0;
+                        this.outPort.fire(context);
+                        return;
+                    }
+                } else if (brain.npc.level().getBlockEntity(brain.memories.furnaceTarget.blockPos())
                         instanceof AbstractFurnaceBlockEntity furnace) {
                     brain.controller.stopMoving(brain.npc);
-                    brain.controller.lookAt(brain.npc, Vec3.atCenterOf(brain.furnaceTarget.blockPos()));
+                    brain.controller.lookAt(brain.npc, Vec3.atCenterOf(brain.memories.furnaceTarget.blockPos()));
                     if (!FurnaceProcessing.canService(furnace)
                             || !FurnaceProcessing.service(brain.npc, furnace)) {
                         clear(brain);
-                        this.searchCooldown = SEARCH_INTERVAL;
+                        brain.memories.furnaceSearchCooldown = SEARCH_INTERVAL;
                     }
                 } else {
                     clear(brain);
@@ -75,7 +85,7 @@ public class UseFurnaceNode extends ExecutableNode {
 
     private static void clear(NpcBrain brain) {
         BlockInteractionStations.release(brain.npc, BlockInteractionStations.Kind.FURNACE);
-        brain.furnaceTarget = null;
-        brain.processingFurnace = false;
+        brain.memories.furnaceTarget = null;
+        brain.memories.processingFurnace = false;
     }
 }

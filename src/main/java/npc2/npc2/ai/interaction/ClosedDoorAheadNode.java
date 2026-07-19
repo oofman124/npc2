@@ -22,7 +22,7 @@ public class ClosedDoorAheadNode extends ConditionNode {
 
     @Override
     protected boolean evaluateCondition() {
-        this.brain.doorTarget = null;
+        this.brain.memories.doorTarget = null;
         if (this.brain.npc.isSleeping()) {
             return false;
         }
@@ -56,7 +56,7 @@ public class ClosedDoorAheadNode extends ConditionNode {
                 && DoorBlock.isWoodenDoor(state)
                 && !door.isOpen(state)
                 && this.brain.npc.distanceToSqr(Vec3.atCenterOf(pos)) <= 9.0D) {
-            this.brain.doorTarget = pos.immutable();
+            this.brain.memories.doorTarget = pos.immutable();
             return true;
         }
         return false;

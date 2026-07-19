@@ -10,6 +10,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -27,6 +29,7 @@ import java.util.UUID;
 /** Finds, reserves, and transfers useful equipment from loaded chests. */
 public final class ChestLooting {
     private static final Map<ChestKey, UUID> RESERVATIONS = new HashMap<>();
+    private static final int VISUAL_OPEN_TICKS = 20;
 
     private ChestLooting() {
     }
@@ -144,6 +147,7 @@ public final class ChestLooting {
     public static boolean deposit(FakeNpcEntity npc, NpcController controller, Target target) {
         BlockEntity blockEntity = npc.level().getBlockEntity(target.chestPos);
         if (!(blockEntity instanceof ChestBlockEntity chest)) return false;
+        openVisual(npc, target.chestPos);
         SimpleContainer bag = npc.getInventory();
         boolean movedAny = false;
 
@@ -170,6 +174,7 @@ public final class ChestLooting {
         if (!(blockEntity instanceof ChestBlockEntity chest)) {
             return false;
         }
+        openVisual(npc, target.chestPos);
 
         boolean movedAny = false;
         SimpleContainer bag = npc.getInventory();
@@ -202,6 +207,66 @@ public final class ChestLooting {
             chest.setChanged();
         }
         return movedAny;
+    }
+
+    /** Keeps vanilla's opener count alive long enough for clients to animate the lid. */
+    public static void tickVisual(FakeNpcEntity npc) {
+        if (npc.getMemories().chestVisualTicks <= 0) return;
+        npc.getMemories().chestVisualTicks--;
+        if (npc.getMemories().chestVisualTicks == 0) closeVisual(npc);
+    }
+
+    private static void openVisual(FakeNpcEntity npc, BlockPos chestPos) {
+        closeVisual(npc);
+        if (!(npc.level() instanceof ServerLevel level)) return;
+        BlockState state = level.getBlockState(chestPos);
+        if (!(state.getBlock() instanceof ChestBlock)) return;
+
+        BlockPos partnerPos = null;
+        if (state.getValue(ChestBlock.TYPE) != ChestType.SINGLE) {
+            BlockPos candidate = ChestBlock.getConnectedBlockPos(chestPos, state);
+            if (level.getBlockEntity(candidate) instanceof ChestBlockEntity) {
+                partnerPos = candidate.immutable();
+            }
+        }
+
+        npc.getMemories().openChestDimension = level.dimension();
+        npc.getMemories().openChestPosition = chestPos.immutable();
+        npc.getMemories().openChestPartnerPosition = partnerPos;
+        npc.getMemories().chestVisualTicks = VISUAL_OPEN_TICKS;
+        startOpen(level, npc.getMemories().openChestPosition, npc);
+        startOpen(level, partnerPos, npc);
+    }
+
+    private static void startOpen(ServerLevel level, @Nullable BlockPos pos, FakeNpcEntity npc) {
+        if (pos != null && level.getBlockEntity(pos) instanceof ChestBlockEntity chest) {
+            chest.startOpen(npc);
+        }
+    }
+
+    public static void closeVisual(FakeNpcEntity npc) {
+        ResourceKey<Level> dimension = npc.getMemories().openChestDimension;
+        BlockPos chestPos = npc.getMemories().openChestPosition;
+        BlockPos partnerPos = npc.getMemories().openChestPartnerPosition;
+        if (dimension != null && npc.level().getServer() != null) {
+            ServerLevel level = npc.level().getServer().getLevel(dimension);
+            if (level != null) {
+                stopOpen(level, chestPos, npc);
+                stopOpen(level, partnerPos, npc);
+            }
+        }
+        npc.getMemories().openChestDimension = null;
+        npc.getMemories().openChestPosition = null;
+        npc.getMemories().openChestPartnerPosition = null;
+        npc.getMemories().chestVisualTicks = 0;
+    }
+
+    private static void stopOpen(ServerLevel level, @Nullable BlockPos pos, FakeNpcEntity npc) {
+        if (pos != null && level.getBlockEntity(pos) instanceof ChestBlockEntity chest) {
+            // The vanilla periodic recheck may already have removed an NPC that
+            // teleported or moved out of range. Do not decrement another opener.
+            if (chest.getEntitiesWithContainerOpen().contains(npc)) chest.stopOpen(npc);
+        }
     }
 
     public static void release(FakeNpcEntity npc) {

@@ -23,13 +23,18 @@ public class MaintainSleepNode extends ExecutableNode {
     @Override
     protected void onExecute(Context context) {
         if (context != null && context.get("Brain") instanceof NpcBrain brain && brain.npc.isSleeping()) {
-            boolean bedMissing = brain.npc.getSleepingPos()
+            boolean validFloorSleep = brain.memories.floorSleeping && brain.npc.getSleepingPos()
+                    .map(pos -> pos.equals(brain.memories.floorSleepPosition))
+                    .orElse(false);
+            boolean bedMissing = !validFloorSleep && brain.npc.getSleepingPos()
                     .map(pos -> !(brain.npc.level().getBlockState(pos).getBlock() instanceof BedBlock))
                     .orElse(true);
-            if (!SurvivalNeeds.isNight(brain.npc) || bedMissing || brain.target != null || brain.blockingMob) {
+            if (!SurvivalNeeds.isNight(brain.npc) || bedMissing || brain.memories.target != null || brain.memories.blockingMob) {
                 brain.npc.stopSleeping();
                 BedReservations.release(brain.npc);
-                brain.bedTarget = null;
+                brain.memories.bedTarget = null;
+                brain.memories.floorSleeping = false;
+                brain.memories.floorSleepPosition = null;
             }
         }
         this.outPort.fire(context);

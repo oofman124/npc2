@@ -5,6 +5,7 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.Items;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.NpcController;
+import npc2.npc2.ai.NpcMemories;
 import npc2.npc2.ai.crafting.BasicCrafting;
 import npc2.npc2.ai.crafting.ToolProgression;
 import npc2.npc2.ai.crafting.WorkstationCrafting;
@@ -103,7 +104,18 @@ public final class SurvivalPlanner {
         }
 
         EnumMap<Resource, Need> snapshot = new EnumMap<>(Resource.class);
-        needs.forEach((resource, need) -> snapshot.put(resource, need.snapshot(resource)));
+        needs.forEach((resource, need) -> {
+            Need raw = need.snapshot(resource);
+            NpcMemories.ResourceAdjustment adjustment = npc.getMemories().adjustResourceScore(
+                    npc, resource, raw.score);
+            String reason = raw.reason;
+            if (adjustment.confidence() == 0.0D) {
+                reason += " (not found nearby; retry later)";
+            } else if (adjustment.confidence() < 1.0D) {
+                reason += " (low local search confidence)";
+            }
+            snapshot.put(resource, new Need(resource, raw.current, raw.target, adjustment.score(), reason));
+        });
         return new Plan(Map.copyOf(snapshot), action, actionScore);
     }
 
@@ -182,6 +194,13 @@ public final class SurvivalPlanner {
                     .mapToDouble(Need::score)
                     .max()
                     .orElse(0.0D);
+        }
+
+        public @org.jspecify.annotations.Nullable Need highestGatheringNeed() {
+            return this.needs.values().stream()
+                    .filter(need -> need.resource.blockGatherable() && need.score > 0.0D)
+                    .max(Comparator.comparingDouble(Need::score))
+                    .orElse(null);
         }
 
         public List<Need> rankedNeeds() {

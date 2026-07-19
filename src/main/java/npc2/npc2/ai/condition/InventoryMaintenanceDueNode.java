@@ -8,7 +8,6 @@ import org.jspecify.annotations.NullMarked;
 public class InventoryMaintenanceDueNode extends ConditionNode {
     private final NpcBrain brain;
     private final int interval;
-    private int ticks;
 
     public InventoryMaintenanceDueNode(String id, NpcBrain brain, int interval) {
         super(id);
@@ -18,10 +17,10 @@ public class InventoryMaintenanceDueNode extends ConditionNode {
 
     @Override
     protected boolean evaluateCondition() {
-        if (++this.ticks < this.interval) {
+        if (++this.brain.memories.inventoryMaintenanceTicks < this.interval) {
             return false;
         }
-        this.ticks = 0;
-        return !this.brain.npc.isSleeping() && !this.brain.blockingMob;
+        this.brain.memories.inventoryMaintenanceTicks = 0;
+        return !this.brain.npc.isSleeping() && !this.brain.memories.blockingMob;
     }
 }

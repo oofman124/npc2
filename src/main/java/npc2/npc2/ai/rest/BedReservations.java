@@ -26,13 +26,19 @@ public final class BedReservations {
     }
 
     public static @Nullable Target findTarget(FakeNpcEntity npc, int radius) {
+        return findTargetExcluding(npc, radius, null);
+    }
+
+    public static @Nullable Target findTargetExcluding(FakeNpcEntity npc, int radius,
+                                                        @Nullable BlockPos excludedBed) {
         ServerLevel level = (ServerLevel)npc.level();
         prune(level);
         BlockPos origin = npc.blockPosition();
         return level.getPoiManager()
                 .findAll(
                         holder -> holder.is(PoiTypes.HOME),
-                        pos -> isAvailable(npc, pos) && isUsableBed(level, pos),
+                        pos -> (excludedBed == null || !pos.equals(excludedBed))
+                                && isAvailable(npc, pos) && isUsableBed(level, pos),
                         origin,
                         radius,
                         PoiManager.Occupancy.ANY
@@ -43,6 +49,13 @@ public final class BedReservations {
                 .map(target -> (Target)target)
                 .findFirst()
                 .orElse(null);
+    }
+
+    public static @Nullable Target findTargetAt(FakeNpcEntity npc, BlockPos bedPos) {
+        ServerLevel level = (ServerLevel)npc.level();
+        prune(level);
+        if (!isAvailable(npc, bedPos) || !isUsableBed(level, bedPos)) return null;
+        return createTarget(npc, bedPos);
     }
 
     public static boolean claim(FakeNpcEntity npc, Target target) {

@@ -17,9 +17,6 @@ public class SeekCraftingTableNode extends ExecutableNode {
     private static final int CRAFT_INTERVAL = 20;
     private static final int SEARCH_INTERVAL = 60;
     private final int radius;
-    private int craftCooldown;
-    private int searchCooldown;
-    private boolean searchPhaseInitialized;
     public final SignalPort outPort;
 
     public SeekCraftingTableNode(String id, int radius) {
@@ -32,16 +29,16 @@ public class SeekCraftingTableNode extends ExecutableNode {
     @Override
     protected void onExecute(Context context) {
         if (context != null && context.get("Brain") instanceof NpcBrain brain) {
-            if (!this.searchPhaseInitialized) {
+            if (!brain.memories.craftingSearchInitialized) {
                 // Do not leave a fresh crafting plan waiting behind a randomized initial delay.
-                this.searchCooldown = 0;
-                this.searchPhaseInitialized = true;
+                brain.memories.craftingSearchCooldown = 0;
+                brain.memories.craftingSearchInitialized = true;
             }
-            if (brain.craftingTableTarget != null && !CraftingStations.isUsable(brain.npc, brain.craftingTableTarget)) {
+            if (brain.memories.craftingTableTarget != null && !CraftingStations.isUsable(brain.npc, brain.memories.craftingTableTarget)) {
                 clear(brain);
             }
-            if (brain.craftingTableTarget == null && this.searchCooldown-- <= 0) {
-                this.searchCooldown = SEARCH_INTERVAL;
+            if (brain.memories.craftingTableTarget == null && brain.memories.craftingSearchCooldown-- <= 0) {
+                brain.memories.craftingSearchCooldown = SEARCH_INTERVAL;
                 CraftingStations.Target candidate = CraftingStations.findTarget(brain.npc, this.radius);
                 if (candidate == null) {
                     BlockInteractionStations.Target placed = CarriedStationPlacement.place(
@@ -49,31 +46,44 @@ public class SeekCraftingTableNode extends ExecutableNode {
                     if (placed != null) candidate = CraftingStations.fromShared(placed);
                 }
                 if (candidate != null && CraftingStations.claim(brain.npc, candidate)) {
-                    brain.craftingTableTarget = candidate;
-                    brain.seekingCraftingTable = true;
+                    brain.memories.craftingTableTarget = candidate;
+                    brain.memories.seekingCraftingTable = true;
+                } else if (candidate == null) {
+                    // Station discovery may have invalidated a stale remembered table.
+                    // Release the intent now so hand-crafting a replacement can run next tick.
+                    clear(brain);
+                    brain.memories.craftingSearchCooldown = 0;
                 }
             }
-            if (brain.craftingTableTarget != null) {
+            if (brain.memories.craftingTableTarget != null) {
                 if (brain.npc.getNpcNavigation().shouldAbandonTarget()) {
                     clear(brain);
                     brain.npc.getNpcNavigation().markTargetAbandoned();
-                    this.searchCooldown = SEARCH_INTERVAL;
+                    brain.memories.craftingSearchCooldown = SEARCH_INTERVAL;
                     this.outPort.fire(context);
                     return;
                 }
-                if (brain.npc.distanceToSqr(brain.craftingTableTarget.approachPosition()) > ARRIVAL_DISTANCE_SQR) {
-                    brain.controller.moveTo(brain.npc, brain.craftingTableTarget.approachPosition(), 0.25D);
+                if (brain.npc.distanceToSqr(brain.memories.craftingTableTarget.approachPosition()) > ARRIVAL_DISTANCE_SQR) {
+                    if (!brain.controller.moveTo(brain.npc, brain.memories.craftingTableTarget.approachPosition(), 0.25D)) {
+                        CraftingStations.forget(brain.npc);
+                        brain.memories.craftingTableTarget = null;
+                        brain.memories.seekingCraftingTable = false;
+                        brain.npc.getNpcNavigation().markTargetAbandoned();
+                        brain.memories.craftingSearchCooldown = 0;
+                        this.outPort.fire(context);
+                        return;
+                    }
                 } else {
                     brain.controller.stopMoving(brain.npc);
-                    brain.controller.lookAt(brain.npc, Vec3.atCenterOf(brain.craftingTableTarget.tablePos()));
-                    if (this.craftCooldown-- <= 0) {
-                        this.craftCooldown = CRAFT_INTERVAL;
+                    brain.controller.lookAt(brain.npc, Vec3.atCenterOf(brain.memories.craftingTableTarget.tablePos()));
+                    if (brain.memories.craftingCooldown-- <= 0) {
+                        brain.memories.craftingCooldown = CRAFT_INTERVAL;
                         brain.controller.swingHand(brain.npc);
                         WorkstationCrafting.craftOne(brain.npc, brain.controller);
                     }
                     if (!WorkstationCrafting.canCraft(brain.npc, brain.controller)) {
                         clear(brain);
-                        this.searchCooldown = SEARCH_INTERVAL;
+                        brain.memories.craftingSearchCooldown = SEARCH_INTERVAL;
                     }
                 }
             }
@@ -83,7 +93,7 @@ public class SeekCraftingTableNode extends ExecutableNode {
 
     private static void clear(NpcBrain brain) {
         CraftingStations.release(brain.npc);
-        brain.craftingTableTarget = null;
-        brain.seekingCraftingTable = false;
+        brain.memories.craftingTableTarget = null;
+        brain.memories.seekingCraftingTable = false;
     }
 }

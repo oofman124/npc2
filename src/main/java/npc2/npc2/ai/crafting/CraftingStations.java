@@ -30,6 +30,10 @@ public final class CraftingStations {
         BlockInteractionStations.release(npc, BlockInteractionStations.Kind.CRAFTING_TABLE);
     }
 
+    public static void forget(FakeNpcEntity npc) {
+        BlockInteractionStations.forget(npc, BlockInteractionStations.Kind.CRAFTING_TABLE);
+    }
+
     public static boolean hasAvailable(FakeNpcEntity npc) {
         return npc.getInventory().countItem(Items.CRAFTING_TABLE) > 0
                 || BlockInteractionStations.hasKnownTarget(npc, BlockInteractionStations.Kind.CRAFTING_TABLE);

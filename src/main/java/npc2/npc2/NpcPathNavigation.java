@@ -62,14 +62,17 @@ public final class NpcPathNavigation {
 		this.pathRecalcDelay = 15;
 		boolean started = this.navigation.moveTo(x, y, z, toSpeedModifier(speed));
 		Path path = this.navigation.getPath();
+		boolean reachesTarget = started && pathActuallyReaches(path, target);
 		if (!started) {
 			this.consecutiveFailures = Math.min(20, this.consecutiveFailures + 1);
-		} else if (pathActuallyReaches(path, target)) {
+		} else if (reachesTarget) {
 			this.consecutiveFailures = 0;
 		} else {
 			this.consecutiveFailures = Math.min(20, this.consecutiveFailures + 1);
 		}
-		return started;
+		// Vanilla may report that movement started for a one-node/partial path which
+		// never reaches the requested destination. Do not expose that as success.
+		return reachesTarget;
 	}
 
 	public boolean moveTo(Vec3 target, double speed) {

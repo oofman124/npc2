@@ -27,14 +27,13 @@ public final class LootReservations {
     private static final int APPROACH_SLOT_COUNT = 16;
     private static final double APPROACH_RADIUS = 1.15D;
     private static final Map<UUID, Claim> CLAIMS = new HashMap<>();
-    private static final Map<AvoidKey, Long> AVOID_UNTIL = new HashMap<>();
 
     private LootReservations() {
     }
 
     public static boolean isAvailable(FakeNpcEntity npc, ItemEntity item) {
-        prune((ServerLevel) npc.level());
-        Long avoidedUntil = AVOID_UNTIL.get(new AvoidKey(npc.getUUID(), item.getUUID()));
+        prune((ServerLevel) npc.level(), npc);
+        Long avoidedUntil = npc.getMemories().avoidedLootUntil.get(item.getUUID());
         if (avoidedUntil != null && avoidedUntil > npc.level().getGameTime()) return false;
         Claim claim = CLAIMS.get(item.getUUID());
         return claim == null || claim.npcId.equals(npc.getUUID());
@@ -47,7 +46,7 @@ public final class LootReservations {
 
     public static boolean claim(FakeNpcEntity npc, ItemEntity item) {
         ServerLevel level = (ServerLevel) npc.level();
-        prune(level);
+        prune(level, npc);
 
         Claim current = CLAIMS.get(item.getUUID());
         if (current != null) {
@@ -97,13 +96,12 @@ public final class LootReservations {
 
     public static void avoid(FakeNpcEntity npc, ItemEntity item, int ticks) {
         release(npc);
-        AVOID_UNTIL.put(new AvoidKey(npc.getUUID(), item.getUUID()), npc.level().getGameTime() + ticks);
+        npc.getMemories().avoidedLootUntil.put(item.getUUID(), npc.level().getGameTime() + ticks);
     }
 
-    private static void prune(ServerLevel level) {
-        AVOID_UNTIL.entrySet().removeIf(entry -> entry.getValue() <= level.getGameTime()
-                || !(level.getEntity(entry.getKey().npcId) instanceof FakeNpcEntity owner) || !owner.isAlive()
-                || !(level.getEntity(entry.getKey().itemId) instanceof ItemEntity item) || !item.isAlive());
+    private static void prune(ServerLevel level, FakeNpcEntity npc) {
+        npc.getMemories().avoidedLootUntil.entrySet().removeIf(entry -> entry.getValue() <= level.getGameTime()
+                || !(level.getEntity(entry.getKey()) instanceof ItemEntity item) || !item.isAlive());
         Iterator<Map.Entry<UUID, Claim>> iterator = CLAIMS.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<UUID, Claim> entry = iterator.next();
@@ -115,16 +113,13 @@ public final class LootReservations {
             if (!(item instanceof ItemEntity itemEntity)
                     || !itemEntity.isAlive()
                     || itemEntity.getItem().isEmpty()
-                    || !(owner instanceof FakeNpcEntity npc)
-                    || !npc.isAlive()) {
+                    || !(owner instanceof FakeNpcEntity ownerNpc)
+                    || !ownerNpc.isAlive()) {
                 iterator.remove();
             }
         }
     }
 
     private record Claim(UUID npcId, ResourceKey<Level> dimension, BlockPos pilePos, int approachSlot) {
-    }
-
-    private record AvoidKey(UUID npcId, UUID itemId) {
     }
 }

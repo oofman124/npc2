@@ -14,7 +14,6 @@ import org.jspecify.annotations.NullMarked;
 @NullMarked
 public class IdleNode extends ExecutableNode {
     private final double radius;
-    private int currentTick;
     public final SignalPort outPort;
 
     public IdleNode(String id, double radius) {
@@ -33,16 +32,16 @@ public class IdleNode extends ExecutableNode {
         if (context.get("Brain") instanceof NpcBrain brain &&
             context.get("Npc") instanceof FakeNpcEntity npc &&
             context.get("Controller") instanceof NpcController controller) {
-            if (brain.target != null || brain.wanderTarget != null || brain.blockingMob || brain.floating || brain.seekingLoot
-                    || brain.seekingChest || brain.seekingBed || brain.depositing || brain.gatheringResource
-                    || brain.seekingCraftingTable || brain.processingFurnace || npc.isSleeping()
+            if (brain.memories.target != null || brain.memories.wanderTarget != null || brain.memories.blockingMob || brain.memories.floating || brain.memories.seekingLoot
+                    || brain.memories.seekingChest || brain.memories.seekingBed || brain.memories.depositing || brain.memories.gatheringResource
+                    || brain.memories.seekingCraftingTable || brain.memories.processingFurnace || npc.isSleeping()
                     || brain.hasPlannedWork()) {
                 this.outPort.fire(context);
                 return;
             }
 
-            this.currentTick++;
-            if ((this.currentTick % 40) != 0) {
+            brain.memories.idleTicks++;
+            if ((brain.memories.idleTicks % 40) != 0) {
                 this.outPort.fire(context);
                 return;
             }

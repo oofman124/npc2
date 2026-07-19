@@ -4,6 +4,7 @@ import io.github.oofman124.asterisk.Context;
 import io.github.oofman124.asterisk.nodes.ExecutableNode;
 import io.github.oofman124.asterisk.ports.SignalPort;
 import io.github.oofman124.asterisk.ports.SignalPortMode;
+import net.minecraft.core.BlockPos;
 import npc2.npc2.ai.NpcBrain;
 import org.jspecify.annotations.NullMarked;
 
@@ -11,7 +12,6 @@ import org.jspecify.annotations.NullMarked;
 public class FindBedNode extends ExecutableNode {
     private static final int SEARCH_INTERVAL = 40;
     private final int searchRadius;
-    private int searchCooldown;
     public final SignalPort outPort;
 
     public FindBedNode(String id, int searchRadius) {
@@ -24,17 +24,36 @@ public class FindBedNode extends ExecutableNode {
     @Override
     protected void onExecute(Context context) {
         if (context != null && context.get("Brain") instanceof NpcBrain brain) {
-            if (brain.bedTarget != null && !BedReservations.isStillUsable(brain.npc, brain.bedTarget)) {
+            if (brain.memories.bedTarget != null && !BedReservations.isStillUsable(brain.npc, brain.memories.bedTarget)) {
                 BedReservations.release(brain.npc);
-                brain.bedTarget = null;
-                brain.seekingBed = false;
+                brain.memories.bedTarget = null;
+                brain.memories.seekingBed = false;
             }
-            if (brain.bedTarget == null && this.searchCooldown-- <= 0) {
-                this.searchCooldown = SEARCH_INTERVAL;
-                BedReservations.Target candidate = BedReservations.findTarget(brain.npc, this.searchRadius);
+            if (brain.memories.bedTarget == null && brain.memories.bedSearchCooldown-- <= 0) {
+                brain.memories.bedSearchCooldown = SEARCH_INTERVAL;
+                BlockPos excludedHome = brain.memories.homeUnavailableUntil > brain.npc.level().getGameTime()
+                        ? brain.memories.homeBedPosition : null;
+                BedReservations.Target candidate = BedReservations.findTargetExcluding(
+                        brain.npc, Math.min(this.searchRadius, NpcHome.NEARBY_BED_RADIUS), excludedHome);
+                if (candidate != null) {
+                    // A usable local bed avoids an unnecessary trip across the area.
+                    brain.memories.returningHome = false;
+                } else if (brain.memories.returningHome && brain.memories.homeBedPosition != null) {
+                    candidate = BedReservations.findTargetAt(brain.npc, brain.memories.homeBedPosition);
+                    if (candidate == null) {
+                        NpcHome.defer(brain.npc);
+                        excludedHome = brain.memories.homeBedPosition;
+                    }
+                }
+                if (candidate == null) {
+                    candidate = BedReservations.findTargetExcluding(brain.npc, this.searchRadius, excludedHome);
+                    if (candidate != null && !NpcHome.isHome(brain.npc, candidate.bedPos())) {
+                        brain.memories.returningHome = false;
+                    }
+                }
                 if (candidate != null && BedReservations.claim(brain.npc, candidate)) {
-                    brain.bedTarget = candidate;
-                    brain.seekingBed = true;
+                    brain.memories.bedTarget = candidate;
+                    brain.memories.seekingBed = true;
                 }
             }
         }

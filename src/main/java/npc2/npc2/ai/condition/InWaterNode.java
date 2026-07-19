@@ -16,7 +16,7 @@ public class InWaterNode extends ConditionNode {
 
     @Override
     protected boolean evaluateCondition() {
-        this.brain.floating = this.brain.npc.isInWater();
-        return this.brain.floating;
+        this.brain.memories.floating = this.brain.npc.isInWater();
+        return this.brain.memories.floating;
     }
 }

@@ -24,8 +24,8 @@ public class RetreatNode extends ExecutableNode {
         if (context != null
                 && context.get("Brain") instanceof NpcBrain brain
                 && context.get("Controller") instanceof NpcController controller
-                && brain.target != null) {
-            Vec3 away = brain.npc.position().subtract(brain.target.position());
+                && brain.memories.target != null) {
+            Vec3 away = brain.npc.position().subtract(brain.memories.target.position());
             if (away.horizontalDistanceSqr() > 0.001D) {
                 Vec3 destination = brain.npc.position().add(away.multiply(1.0D, 0.0D, 1.0D).normalize().scale(10.0D));
                 controller.moveTo(brain.npc, destination, 0.28D);

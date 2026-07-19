@@ -18,8 +18,8 @@ public class NeedsHealingNode extends ConditionNode {
     @Override
     protected boolean evaluateCondition() {
         return this.brain.npc.getHealth() < this.brain.npc.getMaxHealth() * this.healthFraction
-                && !this.brain.blockingMob
-                && (this.brain.target == null || this.brain.npc.distanceTo(this.brain.target) > 6.0D)
+                && !this.brain.memories.blockingMob
+                && (this.brain.memories.target == null || this.brain.npc.distanceTo(this.brain.memories.target) > 6.0D)
                 && !this.brain.npc.isSleeping();
     }
 }

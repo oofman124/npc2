@@ -17,21 +17,22 @@ public class CanUseFurnaceNode extends ConditionNode {
 
     @Override
     protected boolean evaluateCondition() {
-        boolean safe = this.brain.target == null && !this.brain.blockingMob && !this.brain.retreating
-                && !this.brain.floating && !this.brain.seekingLoot && !this.brain.seekingChest
-                && !this.brain.seekingBed && !this.brain.depositing && !this.brain.gatheringResource
-                && !this.brain.seekingCraftingTable && !this.brain.npc.isSleeping();
-        boolean requested = this.brain.processingFurnace
-                || (!this.brain.plan.shouldGather()
-                && this.brain.plan.action() == SurvivalPlanner.Action.FURNACE);
+        boolean safe = this.brain.memories.target == null && !this.brain.memories.blockingMob && !this.brain.memories.retreating
+                && !this.brain.memories.returningHome
+                && !this.brain.memories.floating && !this.brain.memories.seekingLoot && !this.brain.memories.seekingChest
+                && !this.brain.memories.seekingBed && !this.brain.memories.depositing && !this.brain.memories.gatheringResource
+                && !this.brain.memories.seekingCraftingTable && !this.brain.npc.isSleeping();
+        boolean requested = this.brain.memories.processingFurnace
+                || (!this.brain.memories.plan.shouldGather()
+                && this.brain.memories.plan.action() == SurvivalPlanner.Action.FURNACE);
         if (!safe || !requested) {
             BlockInteractionStations.release(this.brain.npc, BlockInteractionStations.Kind.FURNACE);
-            this.brain.furnaceTarget = null;
-            this.brain.processingFurnace = false;
+            this.brain.memories.furnaceTarget = null;
+            this.brain.memories.processingFurnace = false;
             return false;
         }
         // Keep the production branch active while it discovers or places the furnace.
-        this.brain.processingFurnace = true;
+        this.brain.memories.processingFurnace = true;
         return true;
     }
 }

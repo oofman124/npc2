@@ -23,30 +23,35 @@ public class DepositItemsNode extends ExecutableNode {
     @Override
     protected void onExecute(Context context) {
         if (context != null && context.get("Brain") instanceof NpcBrain brain) {
-            if (brain.chestDepositTarget != null
-                    && !ChestLooting.isStillDepositable(brain.npc, brain.controller, brain.chestDepositTarget)) {
+            if (brain.memories.chestDepositTarget != null
+                    && !ChestLooting.isStillDepositable(brain.npc, brain.controller, brain.memories.chestDepositTarget)) {
                 clear(brain);
             }
-            if (brain.chestDepositTarget == null) {
+            if (brain.memories.chestDepositTarget == null) {
                 ChestLooting.Target candidate = ChestLooting.findDepositTarget(brain.npc, brain.controller, this.radius);
                 if (candidate != null && ChestLooting.claim(brain.npc, candidate)) {
-                    brain.chestDepositTarget = candidate;
-                    brain.depositing = true;
+                    brain.memories.chestDepositTarget = candidate;
+                    brain.memories.depositing = true;
                 }
             }
-            if (brain.chestDepositTarget != null) {
+            if (brain.memories.chestDepositTarget != null) {
                 if (brain.npc.getNpcNavigation().shouldAbandonTarget()) {
                     clear(brain);
                     brain.npc.getNpcNavigation().markTargetAbandoned();
                     this.outPort.fire(context);
                     return;
                 }
-                if (brain.npc.distanceToSqr(brain.chestDepositTarget.approachPosition()) > ARRIVAL_DISTANCE_SQR) {
-                    brain.controller.moveTo(brain.npc, brain.chestDepositTarget.approachPosition(), 0.25D);
+                if (brain.npc.distanceToSqr(brain.memories.chestDepositTarget.approachPosition()) > ARRIVAL_DISTANCE_SQR) {
+                    if (!brain.controller.moveTo(brain.npc, brain.memories.chestDepositTarget.approachPosition(), 0.25D)) {
+                        clear(brain);
+                        brain.npc.getNpcNavigation().markTargetAbandoned();
+                        this.outPort.fire(context);
+                        return;
+                    }
                 } else {
                     brain.controller.stopMoving(brain.npc);
                     brain.controller.swingHand(brain.npc);
-                    ChestLooting.deposit(brain.npc, brain.controller, brain.chestDepositTarget);
+                    ChestLooting.deposit(brain.npc, brain.controller, brain.memories.chestDepositTarget);
                     clear(brain);
                 }
             }
@@ -56,7 +61,7 @@ public class DepositItemsNode extends ExecutableNode {
 
     private static void clear(NpcBrain brain) {
         ChestLooting.release(brain.npc);
-        brain.chestDepositTarget = null;
-        brain.depositing = false;
+        brain.memories.chestDepositTarget = null;
+        brain.memories.depositing = false;
     }
 }

@@ -6,6 +6,7 @@ import io.github.oofman124.asterisk.ports.SignalPort;
 import io.github.oofman124.asterisk.ports.SignalPortMode;
 import npc2.npc2.NpcController;
 import npc2.npc2.ai.NpcBrain;
+import npc2.npc2.ai.survival.SurvivalNeeds;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
@@ -23,23 +24,51 @@ public class SleepNode extends ExecutableNode {
     protected void onExecute(Context context) {
         if (context != null
                 && context.get("Brain") instanceof NpcBrain brain
-                && context.get("Controller") instanceof NpcController controller
-                && brain.bedTarget != null) {
-            brain.seekingBed = true;
+                && context.get("Controller") instanceof NpcController controller) {
+            if (brain.memories.bedTarget == null) {
+                if (SurvivalNeeds.shouldSleepOnFloor(brain.npc)) {
+                    controller.stopMoving(brain.npc);
+                    brain.memories.floorSleepPosition = brain.npc.blockPosition().immutable();
+                    brain.memories.floorSleeping = true;
+                    brain.memories.seekingBed = false;
+                    brain.npc.startSleeping(brain.memories.floorSleepPosition);
+                }
+                this.outPort.fire(context);
+                return;
+            }
+            brain.memories.seekingBed = true;
             if (brain.npc.getNpcNavigation().shouldAbandonTarget()) {
+                if (NpcHome.isHome(brain.npc, brain.memories.bedTarget.bedPos())) {
+                    NpcHome.defer(brain.npc);
+                }
                 BedReservations.release(brain.npc);
-                brain.bedTarget = null;
-                brain.seekingBed = false;
+                brain.memories.bedTarget = null;
+                brain.memories.seekingBed = false;
                 brain.npc.getNpcNavigation().markTargetAbandoned();
                 this.outPort.fire(context);
                 return;
             }
-            if (brain.npc.distanceToSqr(brain.bedTarget.approachPosition()) <= ARRIVAL_DISTANCE_SQR) {
+            if (brain.npc.distanceToSqr(brain.memories.bedTarget.approachPosition()) <= ARRIVAL_DISTANCE_SQR) {
                 controller.stopMoving(brain.npc);
-                brain.npc.startSleeping(brain.bedTarget.bedPos());
-                brain.seekingBed = false;
+                brain.memories.floorSleeping = false;
+                brain.memories.floorSleepPosition = null;
+                brain.npc.startSleeping(brain.memories.bedTarget.bedPos());
+                if (brain.npc.isSleeping()) {
+                    NpcHome.remember(brain.npc, brain.memories.bedTarget.bedPos());
+                }
+                brain.memories.seekingBed = false;
             } else {
-                controller.moveTo(brain.npc, brain.bedTarget.approachPosition(), 0.22D);
+                if (!controller.moveTo(brain.npc, brain.memories.bedTarget.approachPosition(), 0.22D)) {
+                    if (NpcHome.isHome(brain.npc, brain.memories.bedTarget.bedPos())) {
+                        NpcHome.defer(brain.npc);
+                    }
+                    BedReservations.release(brain.npc);
+                    brain.memories.bedTarget = null;
+                    brain.memories.seekingBed = false;
+                    brain.npc.getNpcNavigation().markTargetAbandoned();
+                    this.outPort.fire(context);
+                    return;
+                }
             }
         }
         this.outPort.fire(context);

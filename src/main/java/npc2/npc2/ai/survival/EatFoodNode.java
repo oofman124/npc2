@@ -6,12 +6,12 @@ import io.github.oofman124.asterisk.ports.SignalPort;
 import io.github.oofman124.asterisk.ports.SignalPortMode;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.NpcController;
+import npc2.npc2.ai.NpcMemories;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
 public class EatFoodNode extends ExecutableNode {
     private static final int EAT_COOLDOWN = 40;
-    private int cooldown;
     public final SignalPort outPort;
 
     public EatFoodNode(String id) {
@@ -22,13 +22,15 @@ public class EatFoodNode extends ExecutableNode {
 
     @Override
     protected void onExecute(Context context) {
-        if (this.cooldown > 0) {
-            this.cooldown--;
-        } else if (context != null
+        if (context != null
+                && context.get("Memories") instanceof NpcMemories memories
                 && context.get("Npc") instanceof FakeNpcEntity npc
-                && context.get("Controller") instanceof NpcController controller
-                && controller.eatBestFood(npc)) {
-            this.cooldown = EAT_COOLDOWN;
+                && context.get("Controller") instanceof NpcController controller) {
+            if (memories.eatCooldown > 0) {
+                memories.eatCooldown--;
+            } else if (controller.eatBestFood(npc)) {
+                memories.eatCooldown = EAT_COOLDOWN;
+            }
         }
         this.outPort.fire(context);
     }

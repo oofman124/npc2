@@ -29,14 +29,13 @@ import java.util.UUID;
 public final class BlockResourceGathering {
     private static final int PATHFINDING_SHORTLIST_SIZE = 12;
     private static final Map<Key, UUID> RESERVATIONS = new HashMap<>();
-    private static final Map<AvoidKey, Long> AVOID_UNTIL = new HashMap<>();
 
     private BlockResourceGathering() {
     }
 
     public static @Nullable Target findTarget(FakeNpcEntity npc, NpcController controller, int radius) {
         ServerLevel level = (ServerLevel)npc.level();
-        prune(level);
+        prune(level, npc);
         BlockPos origin = npc.blockPosition();
         SurvivalPlanner.Plan plan = SurvivalNeeds.planFor(npc, controller);
         EnumMap<Kind, Double> priorities = priorities(npc, plan);
@@ -74,7 +73,7 @@ public final class BlockResourceGathering {
 
     public static boolean claim(FakeNpcEntity npc, Target target) {
         ServerLevel level = (ServerLevel)npc.level();
-        prune(level);
+        prune(level, npc);
         Key key = new Key(level.dimension(), target.blockPos);
         UUID owner = RESERVATIONS.get(key);
         if (owner != null && !owner.equals(npc.getUUID())) return false;
@@ -98,7 +97,9 @@ public final class BlockResourceGathering {
     public static void avoid(FakeNpcEntity npc, Target target, int ticks) {
         ServerLevel level = (ServerLevel)npc.level();
         release(npc);
-        AVOID_UNTIL.put(new AvoidKey(npc.getUUID(), level.dimension(), target.blockPos), level.getGameTime() + ticks);
+        npc.getMemories().avoidedResourceBlocksUntil.put(
+                new npc2.npc2.ai.NpcMemories.RememberedBlock(level.dimension(), target.blockPos),
+                level.getGameTime() + ticks);
     }
 
     private static EnumMap<Kind, Double> priorities(FakeNpcEntity npc, SurvivalPlanner.Plan plan) {
@@ -165,16 +166,17 @@ public final class BlockResourceGathering {
 
     private static boolean isAvailable(FakeNpcEntity npc, BlockPos pos) {
         Key key = new Key(((ServerLevel)npc.level()).dimension(), pos);
-        Long avoidedUntil = AVOID_UNTIL.get(new AvoidKey(npc.getUUID(), key.dimension, key.pos));
+        Long avoidedUntil = npc.getMemories().avoidedResourceBlocksUntil.get(
+                new npc2.npc2.ai.NpcMemories.RememberedBlock(key.dimension, key.pos));
         if (avoidedUntil != null && avoidedUntil > npc.level().getGameTime()) return false;
         UUID owner = RESERVATIONS.get(key);
         return owner == null || owner.equals(npc.getUUID());
     }
 
-    private static void prune(ServerLevel level) {
-        AVOID_UNTIL.entrySet().removeIf(entry -> entry.getKey().dimension.equals(level.dimension())
-                && (entry.getValue() <= level.getGameTime()
-                || !(level.getEntity(entry.getKey().npcId) instanceof FakeNpcEntity owner) || !owner.isAlive()));
+    private static void prune(ServerLevel level, FakeNpcEntity npc) {
+        npc.getMemories().avoidedResourceBlocksUntil.entrySet().removeIf(entry ->
+                entry.getValue() <= level.getGameTime()
+                        || !entry.getKey().dimension().equals(level.dimension()));
         RESERVATIONS.entrySet().removeIf(entry -> entry.getKey().dimension.equals(level.dimension())
                 && (!(level.getEntity(entry.getValue()) instanceof FakeNpcEntity owner) || !owner.isAlive()));
     }
@@ -227,15 +229,16 @@ public final class BlockResourceGathering {
             return this.requiredPickaxeTier == ToolProgression.NONE
                     || ToolProgression.pickaxeTier(npc) >= this.requiredPickaxeTier;
         }
+
+        public SurvivalPlanner.Resource resource() {
+            return this.resource;
+        }
     }
 
     public record Target(BlockPos blockPos, Vec3 approachPosition, Kind kind) {
     }
 
     private record Key(ResourceKey<Level> dimension, BlockPos pos) {
-    }
-
-    private record AvoidKey(UUID npcId, ResourceKey<Level> dimension, BlockPos pos) {
     }
 
     private record Candidate(BlockPos blockPos, Kind kind, double value) {

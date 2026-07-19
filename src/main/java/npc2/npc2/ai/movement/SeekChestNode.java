@@ -15,8 +15,6 @@ public class SeekChestNode extends ExecutableNode {
     private static final double ARRIVAL_DISTANCE_SQR = 2.25D;
 
     private final double searchRadius;
-    private int searchCooldown;
-    private boolean searchPhaseInitialized;
     public final SignalPort outPort;
 
     public SeekChestNode(String id, double searchRadius) {
@@ -34,42 +32,48 @@ public class SeekChestNode extends ExecutableNode {
         if (context.get("Brain") instanceof NpcBrain brain
                 && context.get("Npc") instanceof FakeNpcEntity npc
                 && context.get("Controller") instanceof NpcController controller) {
-            if (!this.searchPhaseInitialized) {
-                this.searchCooldown = Math.floorMod(npc.getId(), SEARCH_INTERVAL);
-                this.searchPhaseInitialized = true;
+            if (!brain.memories.chestSearchInitialized) {
+                brain.memories.chestSearchCooldown = Math.floorMod(npc.getId(), SEARCH_INTERVAL);
+                brain.memories.chestSearchInitialized = true;
             }
-            if (brain.chestLootTarget != null && !ChestLooting.isStillDesirable(npc, controller, brain.chestLootTarget)) {
+            if (brain.memories.chestLootTarget != null && !ChestLooting.isStillDesirable(npc, controller, brain.memories.chestLootTarget)) {
                 clearTarget(npc, brain);
             }
-            if (brain.chestLootTarget == null && this.searchCooldown-- <= 0) {
-                this.searchCooldown = SEARCH_INTERVAL;
+            if (brain.memories.chestLootTarget == null && brain.memories.chestSearchCooldown-- <= 0) {
+                brain.memories.chestSearchCooldown = SEARCH_INTERVAL;
                 ChestLooting.Target candidate = ChestLooting.findTarget(npc, controller, this.searchRadius);
                 if (candidate != null && ChestLooting.claim(npc, candidate)) {
-                    brain.chestLootTarget = candidate;
+                    brain.memories.chestLootTarget = candidate;
                 }
             }
 
-            if (brain.chestLootTarget != null) {
-                brain.seekingChest = true;
-                brain.chestTarget = brain.chestLootTarget.chestPos();
+            if (brain.memories.chestLootTarget != null) {
+                brain.memories.seekingChest = true;
+                brain.memories.chestTarget = brain.memories.chestLootTarget.chestPos();
                 if (npc.getNpcNavigation().shouldAbandonTarget()) {
                     clearTarget(npc, brain);
                     npc.getNpcNavigation().markTargetAbandoned();
-                    this.searchCooldown = SEARCH_INTERVAL;
+                    brain.memories.chestSearchCooldown = SEARCH_INTERVAL;
                     this.outPort.fire(context);
                     return;
                 }
-                if (npc.distanceToSqr(brain.chestLootTarget.approachPosition()) <= ARRIVAL_DISTANCE_SQR) {
+                if (npc.distanceToSqr(brain.memories.chestLootTarget.approachPosition()) <= ARRIVAL_DISTANCE_SQR) {
                     controller.stopMoving(npc);
-                    ChestLooting.loot(npc, controller, brain.chestLootTarget);
+                    ChestLooting.loot(npc, controller, brain.memories.chestLootTarget);
                     clearTarget(npc, brain);
-                    this.searchCooldown = SEARCH_INTERVAL;
+                    brain.memories.chestSearchCooldown = SEARCH_INTERVAL;
                 } else {
-                    controller.moveTo(npc, brain.chestLootTarget.approachPosition(), 0.25D);
+                    if (!controller.moveTo(npc, brain.memories.chestLootTarget.approachPosition(), 0.25D)) {
+                        clearTarget(npc, brain);
+                        npc.getNpcNavigation().markTargetAbandoned();
+                        brain.memories.chestSearchCooldown = SEARCH_INTERVAL;
+                        this.outPort.fire(context);
+                        return;
+                    }
                 }
             } else {
-                brain.seekingChest = false;
-                brain.chestTarget = null;
+                brain.memories.seekingChest = false;
+                brain.memories.chestTarget = null;
             }
         }
         this.outPort.fire(context);
@@ -77,8 +81,8 @@ public class SeekChestNode extends ExecutableNode {
 
     private void clearTarget(FakeNpcEntity npc, NpcBrain brain) {
         ChestLooting.release(npc);
-        brain.chestLootTarget = null;
-        brain.seekingChest = false;
-        brain.chestTarget = null;
+        brain.memories.chestLootTarget = null;
+        brain.memories.seekingChest = false;
+        brain.memories.chestTarget = null;
     }
 }

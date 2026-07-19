@@ -52,8 +52,8 @@ public final class SurvivalNeeds {
     }
 
     public static SurvivalPlanner.Plan planFor(FakeNpcEntity npc, NpcController controller) {
-        if (npc instanceof CoolEntity cool && cool.brain != null && cool.brain.plan != null) {
-            return cool.brain.plan;
+        if (npc instanceof CoolEntity cool && cool.brain != null) {
+            return cool.brain.memories.plan;
         }
         return SurvivalPlanner.create(npc, controller);
     }
@@ -64,17 +64,33 @@ public final class SurvivalNeeds {
     }
 
     public static boolean hasBedAvailable(FakeNpcEntity npc) {
-        if (ownsBed(npc)) return true;
+        return ownsBed(npc) || hasBedBlockNearby(npc);
+    }
+
+    public static boolean hasBedBlockNearby(FakeNpcEntity npc) {
         for (BlockPos pos : BlockPos.withinManhattan(npc.blockPosition(), 12, 4, 12)) {
             if (npc.level().getBlockState(pos).getBlock() instanceof BedBlock) return true;
         }
         return false;
     }
 
+    /** Midnight fallback after bed search and carried-bed placement have both failed. */
+    public static boolean shouldSleepOnFloor(FakeNpcEntity npc) {
+        return isMidnightOrLater(npc)
+                && npc.getMemories().bedTarget == null
+                && !hasBedBlockNearby(npc);
+    }
+
     public static boolean isNight(FakeNpcEntity npc) {
         if (!(npc.level() instanceof ServerLevel level)) return false;
         long time = Math.floorMod(level.getOverworldClockTime(), 24000L);
         return time >= 12542L && time < 23460L;
+    }
+
+    public static boolean isMidnightOrLater(FakeNpcEntity npc) {
+        if (!(npc.level() instanceof ServerLevel level)) return false;
+        long time = Math.floorMod(level.getOverworldClockTime(), 24000L);
+        return time >= 18000L && time < 23460L;
     }
 
 }

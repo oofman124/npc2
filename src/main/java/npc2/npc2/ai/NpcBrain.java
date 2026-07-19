@@ -2,9 +2,6 @@ package npc2.npc2.ai;
 
 import io.github.oofman124.asterisk.ContextTemplate;
 import io.github.oofman124.asterisk.Graph;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.NpcController;
@@ -12,6 +9,7 @@ import npc2.npc2.ai.combat.AttackTargetNode;
 import npc2.npc2.ai.combat.BlockMobNode;
 import npc2.npc2.ai.combat.ChaseTargetNode;
 import npc2.npc2.ai.combat.FocusTargetNode;
+import npc2.npc2.ai.combat.PlaceCreeperCoverNode;
 import npc2.npc2.ai.combat.TargetRangeNode;
 import npc2.npc2.ai.equipment.EquipBestArmorNode;
 import npc2.npc2.ai.equipment.EquipBestWeaponNode;
@@ -20,6 +18,7 @@ import npc2.npc2.ai.equipment.EquipTotemNode;
 import npc2.npc2.ai.movement.IdleNode;
 import npc2.npc2.ai.movement.SeekLootNode;
 import npc2.npc2.ai.movement.SeekChestNode;
+import npc2.npc2.ai.movement.ChestLooting;
 import npc2.npc2.ai.movement.WanderNode;
 import npc2.npc2.ai.sensing.SenseEntitiesNode;
 import npc2.npc2.ai.util.DebounceNode;
@@ -29,12 +28,11 @@ import npc2.npc2.ai.condition.CanSleepNode;
 import npc2.npc2.ai.condition.HasBedTargetNode;
 import npc2.npc2.ai.interaction.ClosedDoorAheadNode;
 import npc2.npc2.ai.interaction.OpenDoorNode;
-import npc2.npc2.ai.movement.ChestLooting;
-import npc2.npc2.ai.rest.BedReservations;
 import npc2.npc2.ai.rest.FindBedNode;
 import npc2.npc2.ai.rest.MaintainSleepNode;
 import npc2.npc2.ai.rest.SleepNode;
 import npc2.npc2.ai.rest.PrepareCampNode;
+import npc2.npc2.ai.rest.NpcHome;
 import npc2.npc2.ai.condition.NeedsHealingNode;
 import npc2.npc2.ai.condition.HasFoodNode;
 import npc2.npc2.ai.condition.CanCraftNode;
@@ -46,10 +44,8 @@ import npc2.npc2.ai.survival.EatFoodNode;
 import npc2.npc2.ai.survival.RetreatNode;
 import npc2.npc2.ai.movement.FloatInWaterNode;
 import npc2.npc2.ai.movement.GatherResourcesNode;
-import npc2.npc2.ai.movement.BlockResourceGathering;
 import npc2.npc2.ai.movement.DepositItemsNode;
 import npc2.npc2.ai.crafting.CraftBasicSuppliesNode;
-import npc2.npc2.ai.crafting.CraftingStations;
 import npc2.npc2.ai.crafting.SeekCraftingTableNode;
 import npc2.npc2.ai.condition.CanGatherResourcesNode;
 import npc2.npc2.ai.condition.CanDepositItemsNode;
@@ -57,20 +53,17 @@ import npc2.npc2.ai.condition.CanUseCraftingTableNode;
 import npc2.npc2.ai.condition.CanUseFurnaceNode;
 import npc2.npc2.ai.inventory.ManageInventoryNode;
 import npc2.npc2.ai.interaction.TerrainAssistNode;
-import npc2.npc2.ai.interaction.BlockInteractionStations;
 import npc2.npc2.ai.processing.UseFurnaceNode;
 import npc2.npc2.ai.survival.SurvivalPlanner;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
-
-import java.util.HashMap;
-import java.util.Map;
 
 @NullMarked
 public class NpcBrain {
     public final Graph graph;
     public final FakeNpcEntity npc;
     public final NpcController controller;
+    public final NpcMemories memories;
     public final ContextTemplate template;
 
     public final SenseEntitiesNode senseEntitiesNode;
@@ -79,6 +72,7 @@ public class NpcBrain {
     public final EquipShieldNode equipShieldNode;
     public final EquipBestArmorNode equipBestArmorNode;
     public final BlockMobNode blockMobNode;
+    public final PlaceCreeperCoverNode placeCreeperCoverNode;
     public final CanSeekGroundLootNode canSeekGroundLootNode;
     public final SeekLootNode seekLootNode;
     public final CanSeekChestNode canSeekChestNode;
@@ -120,47 +114,18 @@ public class NpcBrain {
     public final WanderNode wanderNode;
     public final IdleNode idleNode;
 
-    public @Nullable LivingEntity target;
-    public boolean targetInRange;
-    public @Nullable Vec3 wanderTarget;
-    public boolean blockingMob;
-    public boolean retreating;
-    public boolean hunting;
-    public boolean floating;
-    public boolean gatheringResource;
-    public boolean depositing;
-    public boolean seekingCraftingTable;
-    public @Nullable LivingEntity blockThreat;
-    public boolean seekingLoot;
-    public @Nullable ItemEntity lootTarget;
-    public boolean seekingChest;
-    public @Nullable BlockPos chestTarget;
-    public ChestLooting.@Nullable Target chestLootTarget;
-    public boolean seekingBed;
-    public BedReservations.@Nullable Target bedTarget;
-    public @Nullable BlockPos doorTarget;
-    public @Nullable BlockPos campBedPosition;
-    public BlockResourceGathering.@Nullable Target resourceTarget;
-    public ChestLooting.@Nullable Target chestDepositTarget;
-    public CraftingStations.@Nullable Target craftingTableTarget;
-    public BlockInteractionStations.@Nullable Target furnaceTarget;
-    public boolean processingFurnace;
-    public SurvivalPlanner.Plan plan;
-
     public NpcBrain(FakeNpcEntity npc, @Nullable Graph graph) {
         this.graph = (graph != null) ? graph : new Graph("NpcBrain");
         this.npc = npc;
         this.controller = npc.getController();
-        this.plan = SurvivalPlanner.create(npc, this.controller);
-
-        Map<String, Object> map = new HashMap<>();
-        map.put("Npc", npc);
-        map.put("Controller", this.controller);
-        map.put("Brain", this);
-        this.template = new ContextTemplate(map);
+        this.memories = npc.getMemories();
+        this.memories.plan = SurvivalPlanner.create(npc, this.controller);
+        // The parent template contains stable object references. Each GlobalEventNode
+        // creates a fresh child context for values that are valid for only that event.
+        this.template = new ContextTemplate(NpcContext.stable(npc, this.controller, this, this.memories));
 
         this.graph.applyContextTemplate(this.template);
-        this.graph.addGlobalEventNode("Tick", this.template, 1);
+        this.graph.addGlobalEventNode("Tick", null, 1);
 
         // Keep broad scans inside the entity's useful follow range. A 500-block AABB made
         // every NPC inspect a huge portion of the loaded world for targets it could not pursue.
@@ -170,10 +135,11 @@ public class NpcBrain {
         this.equipShieldNode = new EquipShieldNode("EquipShield");
         this.equipBestArmorNode = new EquipBestArmorNode("EquipBestArmor");
         this.blockMobNode = new BlockMobNode("BlockMob");
+        this.placeCreeperCoverNode = new PlaceCreeperCoverNode("PlaceCreeperCover");
         this.canSeekGroundLootNode = new CanSeekGroundLootNode("CanSeekGroundLoot", this);
         this.seekLootNode = new SeekLootNode("SeekLoot", 64.0D, 6.0D);
         this.canSeekChestNode = new CanSeekChestNode("CanSeekChest", this, 6.0D);
-        this.seekChestNode = new SeekChestNode("SeekChest", 32.0D);
+        this.seekChestNode = new SeekChestNode("SeekChest", 52.0D);
         this.maintainSleepNode = new MaintainSleepNode("MaintainSleep");
         this.canSleepNode = new CanSleepNode("CanSleep", this);
         this.findBedNode = new FindBedNode("FindBed", 32);
@@ -196,7 +162,7 @@ public class NpcBrain {
         this.inWaterNode = new InWaterNode("InWater", this);
         this.floatInWaterNode = new FloatInWaterNode("FloatInWater");
         this.canGatherResourcesNode = new CanGatherResourcesNode("CanGatherResources", this);
-        this.gatherResourcesNode = new GatherResourcesNode("GatherResources", 20);
+        this.gatherResourcesNode = new GatherResourcesNode("GatherResources", 88);
         this.canDepositItemsNode = new CanDepositItemsNode("CanDepositItems", this);
         this.depositItemsNode = new DepositItemsNode("DepositItems", 32.0D);
         this.canUseCraftingTableNode = new CanUseCraftingTableNode("CanUseCraftingTable", this);
@@ -205,8 +171,8 @@ public class NpcBrain {
         this.useFurnaceNode = new UseFurnaceNode("UseFurnace", 24);
         this.focusTargetNode = new FocusTargetNode("FocusTarget");
         this.chaseTargetNode = new ChaseTargetNode("ChaseTarget", 0.25D);
-        this.targetRangeNode = new TargetRangeNode("TargetRange", this, 2.25D);
-        this.attackDebounceNode = new DebounceNode("AttackDebounce", 12);
+        this.targetRangeNode = new TargetRangeNode("TargetRange", 2.25D);
+        this.attackDebounceNode = new DebounceNode("AttackDebounce", this, 12);
         this.attackTargetNode = new AttackTargetNode("AttackTarget");
         this.wanderNode = new WanderNode("Wander", new Vec3(30, 30, 30));
         this.idleNode = new IdleNode("Idle", 8.0D);
@@ -217,6 +183,7 @@ public class NpcBrain {
         this.graph.addNode(this.equipShieldNode);
         this.graph.addNode(this.equipBestArmorNode);
         this.graph.addNode(this.blockMobNode);
+        this.graph.addNode(this.placeCreeperCoverNode);
         this.graph.addNode(this.canSeekGroundLootNode);
         this.graph.addNode(this.seekLootNode);
         this.graph.addNode(this.canSeekChestNode);
@@ -268,6 +235,7 @@ public class NpcBrain {
         this.graph.connectSignals(this.equipTotemNode.getId(), "Out", this.equipShieldNode.getId(), "In");
         this.graph.connectSignals(this.equipShieldNode.getId(), "Out", this.equipBestArmorNode.getId(), "In");
         this.graph.connectSignals(this.equipBestArmorNode.getId(), "Out", this.blockMobNode.getId(), "In");
+        this.graph.connectSignals(this.blockMobNode.getId(), "Out", this.placeCreeperCoverNode.getId(), "In");
         // Update the escape policy before ordinary combat consumes it.
         this.graph.connectSignals(this.blockMobNode.getId(), "Out", this.criticalHealthNode.getId(), "In");
         this.graph.connectSignals(this.criticalHealthNode.getId(), "Out", this.retreatNode.getId(), "In");
@@ -325,17 +293,24 @@ public class NpcBrain {
     }
 
     public void Tick() {
-        this.plan = SurvivalPlanner.create(this.npc, this.controller);
+        ChestLooting.tickVisual(this.npc);
+        NpcHome.updateReturnIntent(this);
+        this.memories.plan = SurvivalPlanner.create(this.npc, this.controller);
+        NpcContext.tick(this.memories.plan)
+                .forEach((key, value) -> this.graph.getGlobalContext().set(key, value));
         this.graph.fireGlobalEventNode("Tick");
     }
 
     /** True while the planner still expects the NPC to gather or produce something. */
     public boolean hasPlannedWork() {
-        return this.plan.shouldGather() || this.plan.action() != SurvivalPlanner.Action.NONE;
+        return this.memories.returningHome
+                || this.memories.plan.shouldGather()
+                || this.memories.plan.action() != SurvivalPlanner.Action.NONE;
     }
 
     /** Crafting/smelting plans should not be displaced by ordinary wandering. */
     public boolean hasProductionPlan() {
-        return !this.plan.shouldGather() && this.plan.action() != SurvivalPlanner.Action.NONE;
+        return !this.memories.plan.shouldGather()
+                && this.memories.plan.action() != SurvivalPlanner.Action.NONE;
     }
 }

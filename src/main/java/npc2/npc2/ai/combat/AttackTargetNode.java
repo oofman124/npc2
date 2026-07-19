@@ -8,6 +8,8 @@ import net.minecraft.world.entity.LivingEntity;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.NpcController;
 import npc2.npc2.ai.NpcBrain;
+import npc2.npc2.ai.NpcContext;
+import npc2.npc2.ai.rest.NpcHome;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
@@ -29,18 +31,19 @@ public class AttackTargetNode extends ExecutableNode {
         if (context.get("Brain") instanceof NpcBrain brain &&
             context.get("Npc") instanceof FakeNpcEntity npc &&
             context.get("Controller") instanceof NpcController controller &&
-            brain.target instanceof LivingEntity target &&
-            brain.targetInRange &&
-            !brain.blockingMob &&
-            !brain.retreating &&
-            !brain.seekingLoot &&
-            !brain.seekingChest &&
-            !brain.seekingBed &&
-            !brain.depositing &&
-            !brain.gatheringResource &&
-            !brain.seekingCraftingTable &&
-            !brain.processingFurnace &&
+            context.get(NpcContext.TARGET) instanceof LivingEntity target &&
+            Boolean.TRUE.equals(context.get(NpcContext.TARGET_IN_RANGE)) &&
+            !brain.memories.blockingMob &&
+            !brain.memories.retreating &&
+            !brain.memories.seekingLoot &&
+            !brain.memories.seekingChest &&
+            !brain.memories.seekingBed &&
+            !brain.memories.depositing &&
+            !brain.memories.gatheringResource &&
+            !brain.memories.seekingCraftingTable &&
+            !brain.memories.processingFurnace &&
             !npc.isSleeping() &&
+            (!brain.memories.returningHome || NpcHome.isThreatAtHome(npc, target)) &&
             target.isAlive()) {
             controller.attackEntity(npc, target);
         }

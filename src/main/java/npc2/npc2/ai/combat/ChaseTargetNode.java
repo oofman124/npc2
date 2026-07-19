@@ -8,6 +8,8 @@ import net.minecraft.world.entity.LivingEntity;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.NpcController;
 import npc2.npc2.ai.NpcBrain;
+import npc2.npc2.ai.NpcContext;
+import npc2.npc2.ai.rest.NpcHome;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
@@ -31,25 +33,27 @@ public class ChaseTargetNode extends ExecutableNode {
         if (context.get("Brain") instanceof NpcBrain brain &&
             context.get("Npc") instanceof FakeNpcEntity npc &&
             context.get("Controller") instanceof NpcController controller &&
-            brain.target instanceof LivingEntity target &&
+            context.get(NpcContext.TARGET) instanceof LivingEntity target &&
+            (!brain.memories.returningHome || NpcHome.isThreatAtHome(npc, target)) &&
             target.isAlive()) {
             double distanceSqr = npc.distanceToSqr(target);
-            brain.targetInRange = distanceSqr <= 4.0D;
+            boolean targetInRange = distanceSqr <= 4.0D;
+            context.set(NpcContext.TARGET_IN_RANGE, targetInRange);
 
-            if (brain.blockingMob || brain.retreating || brain.seekingLoot || brain.seekingChest || brain.seekingBed
-                    || brain.depositing || brain.gatheringResource || brain.seekingCraftingTable
-                    || brain.processingFurnace || npc.isSleeping()) {
+            if (brain.memories.blockingMob || brain.memories.retreating || brain.memories.seekingLoot || brain.memories.seekingChest || brain.memories.seekingBed
+                    || brain.memories.depositing || brain.memories.gatheringResource || brain.memories.seekingCraftingTable
+                    || brain.memories.processingFurnace || npc.isSleeping()) {
                 this.outPort.fire(context);
                 return;
             }
 
-            if (!brain.targetInRange) {
+            if (!targetInRange) {
                 controller.moveTo(npc, target, this.speed);
             } else {
                 controller.stopMoving(npc);
             }
-        } else if (context.get("Brain") instanceof NpcBrain brain) {
-            brain.targetInRange = false;
+        } else {
+            context.set(NpcContext.TARGET_IN_RANGE, false);
         }
         this.outPort.fire(context);
     }

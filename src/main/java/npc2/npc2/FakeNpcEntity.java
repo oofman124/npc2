@@ -1,5 +1,6 @@
 package npc2.npc2;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -16,16 +17,19 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.ContainerUser;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.ContainerOpenersCounter;
 import npc2.npc2.ai.CoolEntity;
+import npc2.npc2.ai.NpcMemories;
 
 /**
  * A server-side NPC built on {@link PathfinderMob} instead of a fake {@code ServerPlayer}.
  * Uses real mob pathfinding, equipment, and combat, with a small inventory bag for loot/gear.
  */
-public class FakeNpcEntity extends PathfinderMob {
+public class FakeNpcEntity extends PathfinderMob implements ContainerUser {
 
 	private static final int INVENTORY_SIZE = 27;
 	private static final EntityDataAccessor<Integer> DATA_ATTACK_SWING_SEQUENCE = SynchedEntityData.defineId(FakeNpcEntity.class, EntityDataSerializers.INT);
@@ -34,6 +38,7 @@ public class FakeNpcEntity extends PathfinderMob {
 	private NpcController controller;
 	private final NpcPathNavigation navigation;
 	private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
+	private final NpcMemories memories = new NpcMemories();
 	private int lastClientSwingSequence;
 
 	protected MinecraftServer npcServer;
@@ -144,6 +149,25 @@ public class FakeNpcEntity extends PathfinderMob {
 	/** Non-equipment bag (armor/weapons wait here until equipped). */
 	public SimpleContainer getInventory() {
 		return this.inventory;
+	}
+
+	public NpcMemories getMemories() {
+		return this.memories;
+	}
+
+	@Override
+	public boolean hasContainerOpen(ContainerOpenersCounter counter, BlockPos pos) {
+		return this.isAlive()
+			&& !this.isRemoved()
+			&& this.memories.openChestDimension != null
+			&& this.memories.openChestDimension.equals(this.level().dimension())
+			&& (pos.equals(this.memories.openChestPosition)
+			|| pos.equals(this.memories.openChestPartnerPosition));
+	}
+
+	@Override
+	public double getContainerInteractionRange() {
+		return 4.5D;
 	}
 
 	public static FakeNpcEntity spawn(MinecraftServer server, ServerLevel level, String name, double x, double y, double z) {

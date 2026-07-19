@@ -17,11 +17,11 @@ public class CriticalHealthNode extends ConditionNode {
 
     @Override
     protected boolean evaluateCondition() {
-        this.brain.retreating = this.brain.target != null
-                && this.brain.target.isAlive()
+        this.brain.memories.retreating = this.brain.memories.target != null
+                && this.brain.memories.target.isAlive()
                 && this.brain.npc.getHealth() < this.brain.npc.getMaxHealth() * this.healthFraction
-                && !this.brain.hunting
-                && !this.brain.blockingMob;
-        return this.brain.retreating;
+                && !this.brain.memories.hunting
+                && !this.brain.memories.blockingMob;
+        return this.brain.memories.retreating;
     }
 }

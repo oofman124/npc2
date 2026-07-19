@@ -15,6 +15,7 @@ import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.bee.Bee;
 import net.minecraft.world.entity.animal.chicken.Chicken;
 import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.entity.animal.pig.Pig;
@@ -65,6 +66,7 @@ public interface NpcController {
     /** Called once when detached (despawn, controller swap, etc). Clean up here. */
     default void onDetach(FakeNpcEntity npc) {
         LootReservations.release(npc);
+        ChestLooting.closeVisual(npc);
         ChestLooting.release(npc);
         BedReservations.release(npc);
         BlockResourceGathering.release(npc);
@@ -302,6 +304,9 @@ public interface NpcController {
             return false;
         }
         if (candidate instanceof IronGolem) {
+            //return true;
+        }
+        if (candidate instanceof Bee) {
             return true;
         }
         return candidate instanceof Monster;

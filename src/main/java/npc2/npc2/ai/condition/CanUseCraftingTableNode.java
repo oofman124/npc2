@@ -17,21 +17,22 @@ public class CanUseCraftingTableNode extends ConditionNode {
 
     @Override
     protected boolean evaluateCondition() {
-        boolean safe = this.brain.target == null && !this.brain.blockingMob && !this.brain.retreating
-                && !this.brain.floating && !this.brain.seekingLoot && !this.brain.seekingChest
-                && !this.brain.seekingBed && !this.brain.depositing && !this.brain.gatheringResource
-                && !this.brain.processingFurnace
+        boolean safe = this.brain.memories.target == null && !this.brain.memories.blockingMob && !this.brain.memories.retreating
+                && !this.brain.memories.returningHome
+                && !this.brain.memories.floating && !this.brain.memories.seekingLoot && !this.brain.memories.seekingChest
+                && !this.brain.memories.seekingBed && !this.brain.memories.depositing && !this.brain.memories.gatheringResource
+                && !this.brain.memories.processingFurnace
                 && !this.brain.npc.isSleeping();
-        if (!safe || this.brain.plan.shouldGather()
-                || this.brain.plan.action() != SurvivalPlanner.Action.CRAFTING_TABLE) {
+        if (!safe || this.brain.memories.plan.shouldGather()
+                || this.brain.memories.plan.action() != SurvivalPlanner.Action.CRAFTING_TABLE) {
             CraftingStations.release(this.brain.npc);
-            this.brain.craftingTableTarget = null;
-            this.brain.seekingCraftingTable = false;
+            this.brain.memories.craftingTableTarget = null;
+            this.brain.memories.seekingCraftingTable = false;
             return false;
         }
         // Claim the work intent before station discovery so idle/wander cannot take over
         // during a search cooldown or while a carried table is being placed.
-        this.brain.seekingCraftingTable = true;
+        this.brain.memories.seekingCraftingTable = true;
         return true;
     }
 }

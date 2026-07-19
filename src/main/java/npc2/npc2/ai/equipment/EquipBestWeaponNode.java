@@ -28,10 +28,10 @@ public class EquipBestWeaponNode extends ExecutableNode {
         if (context.get("Npc") instanceof FakeNpcEntity npc &&
             context.get("Controller") instanceof NpcController controller) {
             NpcBrain brain = context.get("Brain") instanceof NpcBrain value ? value : null;
-            if (brain != null && brain.target != null) {
+            if (brain != null && brain.memories.target != null) {
                 controller.equipBestWeapon(npc);
-            } else if (brain != null && brain.resourceTarget != null) {
-                controller.equipBestToolForBlock(npc, npc.level().getBlockState(brain.resourceTarget.blockPos()));
+            } else if (brain != null && brain.memories.resourceTarget != null) {
+                controller.equipBestToolForBlock(npc, npc.level().getBlockState(brain.memories.resourceTarget.blockPos()));
             } else {
                 controller.equipBestWeapon(npc);
             }

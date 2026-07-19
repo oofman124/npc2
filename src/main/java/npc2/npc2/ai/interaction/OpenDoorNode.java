@@ -22,12 +22,12 @@ public class OpenDoorNode extends ExecutableNode {
 
     @Override
     protected void onExecute(Context context) {
-        if (context != null && context.get("Brain") instanceof NpcBrain brain && brain.doorTarget != null) {
-            BlockState state = brain.npc.level().getBlockState(brain.doorTarget);
+        if (context != null && context.get("Brain") instanceof NpcBrain brain && brain.memories.doorTarget != null) {
+            BlockState state = brain.npc.level().getBlockState(brain.memories.doorTarget);
             if (state.getBlock() instanceof DoorBlock door && DoorBlock.isWoodenDoor(state) && !door.isOpen(state)) {
-                door.setOpen(brain.npc, brain.npc.level(), state, brain.doorTarget, true);
+                door.setOpen(brain.npc, brain.npc.level(), state, brain.memories.doorTarget, true);
             }
-            brain.doorTarget = null;
+            brain.memories.doorTarget = null;
         }
         this.outPort.fire(context);
     }

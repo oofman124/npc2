@@ -20,7 +20,6 @@ import org.jspecify.annotations.NullMarked;
 @NullMarked
 public class PrepareCampNode extends ExecutableNode {
     private static final int ACTION_INTERVAL = 20;
-    private int cooldown;
     public final SignalPort outPort;
 
     public PrepareCampNode(String id) {
@@ -31,12 +30,13 @@ public class PrepareCampNode extends ExecutableNode {
 
     @Override
     protected void onExecute(Context context) {
-        if (context != null && context.get("Brain") instanceof NpcBrain brain && this.cooldown-- <= 0) {
-            this.cooldown = ACTION_INTERVAL;
-            BlockPos bed = brain.bedTarget != null ? brain.bedTarget.bedPos() : brain.campBedPosition;
+        if (context != null && context.get("Brain") instanceof NpcBrain brain
+                && brain.memories.campPreparationCooldown-- <= 0) {
+            brain.memories.campPreparationCooldown = ACTION_INTERVAL;
+            BlockPos bed = brain.memories.bedTarget != null ? brain.memories.bedTarget.bedPos() : brain.memories.campBedPosition;
             if (bed == null || !(brain.npc.level().getBlockState(bed).getBlock() instanceof BedBlock)) {
                 bed = placeBed(brain);
-                brain.campBedPosition = bed;
+                brain.memories.campBedPosition = bed;
             }
             if (bed != null) placeBedsideTorch(brain, bed);
         }

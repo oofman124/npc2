@@ -16,15 +16,16 @@ public class CanGatherResourcesNode extends ConditionNode {
 
     @Override
     protected boolean evaluateCondition() {
-        boolean allowed = this.brain.target == null && !this.brain.blockingMob && !this.brain.retreating
-                && !this.brain.floating && !this.brain.seekingLoot && !this.brain.seekingChest
-                && !this.brain.depositing && !this.brain.seekingBed && !this.brain.seekingCraftingTable
-                && !this.brain.processingFurnace && !this.brain.npc.isSleeping()
-                && this.brain.plan.shouldGather();
+        boolean allowed = this.brain.memories.target == null && !this.brain.memories.blockingMob && !this.brain.memories.retreating
+                && !this.brain.memories.returningHome
+                && !this.brain.memories.floating && !this.brain.memories.seekingLoot && !this.brain.memories.seekingChest
+                && !this.brain.memories.depositing && !this.brain.memories.seekingBed && !this.brain.memories.seekingCraftingTable
+                && !this.brain.memories.processingFurnace && !this.brain.npc.isSleeping()
+                && this.brain.memories.plan.shouldGather();
         if (!allowed) {
             BlockResourceGathering.release(this.brain.npc);
-            this.brain.resourceTarget = null;
-            this.brain.gatheringResource = false;
+            this.brain.memories.resourceTarget = null;
+            this.brain.memories.gatheringResource = false;
         }
         return allowed;
     }

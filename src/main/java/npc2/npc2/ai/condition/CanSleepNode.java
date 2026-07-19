@@ -22,20 +22,20 @@ public class CanSleepNode extends ConditionNode {
         boolean allowed = this.brain.npc.level().dimension().equals(Level.OVERWORLD)
                 && SurvivalNeeds.isNight(this.brain.npc)
                 && !this.brain.npc.isSleeping()
-                && this.brain.target == null
-                && !this.brain.blockingMob
-                && !this.brain.retreating
-                && !this.brain.seekingLoot
-                && !this.brain.seekingChest
-                && !this.brain.depositing
-                && !this.brain.gatheringResource
-                && !this.brain.seekingCraftingTable
-                && !this.brain.processingFurnace;
+                && this.brain.memories.target == null
+                && !this.brain.memories.blockingMob
+                && !this.brain.memories.retreating
+                && !this.brain.memories.seekingLoot
+                && !this.brain.memories.seekingChest
+                && !this.brain.memories.depositing
+                && !this.brain.memories.gatheringResource
+                && !this.brain.memories.seekingCraftingTable
+                && !this.brain.memories.processingFurnace;
 
         if (!allowed && !this.brain.npc.isSleeping()) {
             BedReservations.release(this.brain.npc);
-            this.brain.bedTarget = null;
-            this.brain.seekingBed = false;
+            this.brain.memories.bedTarget = null;
+            this.brain.memories.seekingBed = false;
         }
         return allowed;
     }

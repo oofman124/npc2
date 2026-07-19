@@ -16,8 +16,6 @@ public class SeekLootNode extends ExecutableNode {
     private static final int UNREACHABLE_COOLDOWN = 160;
     private final double searchRadius;
     private final double safeCombatDistance;
-    private int searchCooldown;
-    private boolean searchPhaseInitialized;
     public final SignalPort outPort;
 
     public SeekLootNode(String id, double searchRadius, double safeCombatDistance) {
@@ -38,24 +36,24 @@ public class SeekLootNode extends ExecutableNode {
             context.get("Npc") instanceof FakeNpcEntity npc &&
             context.get("Controller") instanceof NpcController controller) {
 
-            if (!this.searchPhaseInitialized) {
-                this.searchCooldown = Math.floorMod(npc.getId(), SEARCH_INTERVAL);
-                this.searchPhaseInitialized = true;
+            if (!brain.memories.lootSearchInitialized) {
+                brain.memories.lootSearchCooldown = Math.floorMod(npc.getId(), SEARCH_INTERVAL);
+                brain.memories.lootSearchInitialized = true;
             }
 
-            ItemEntity loot = brain.lootTarget;
+            ItemEntity loot = brain.memories.lootTarget;
             if (loot != null && (!loot.isAlive() || loot.getItem().isEmpty()
                     || controller.getDesirableLootScore(npc, loot.getItem()) <= 0.0D
                     || !LootReservations.isAvailable(npc, loot))) {
                 clear(npc, brain);
                 loot = null;
             }
-            if (loot == null && this.searchCooldown-- <= 0) {
-                this.searchCooldown = SEARCH_INTERVAL;
+            if (loot == null && brain.memories.lootSearchCooldown-- <= 0) {
+                brain.memories.lootSearchCooldown = SEARCH_INTERVAL;
                 loot = controller.findDesirableGroundLoot(
-                        npc, this.searchRadius, brain.target, this.safeCombatDistance);
+                        npc, this.searchRadius, brain.memories.target, this.safeCombatDistance);
                 if (loot != null && LootReservations.claim(npc, loot)) {
-                    brain.lootTarget = loot;
+                    brain.memories.lootTarget = loot;
                 } else {
                     loot = null;
                 }
@@ -65,15 +63,23 @@ public class SeekLootNode extends ExecutableNode {
                 if (npc.getNpcNavigation().shouldAbandonTarget()) {
                     LootReservations.avoid(npc, loot, UNREACHABLE_COOLDOWN);
                     npc.getNpcNavigation().markTargetAbandoned();
-                    brain.seekingLoot = false;
-                    brain.lootTarget = null;
-                    this.searchCooldown = SEARCH_INTERVAL;
+                    brain.memories.seekingLoot = false;
+                    brain.memories.lootTarget = null;
+                    brain.memories.lootSearchCooldown = SEARCH_INTERVAL;
                     this.outPort.fire(context);
                     return;
                 }
-                brain.seekingLoot = true;
-                brain.lootTarget = loot;
-                controller.moveTo(npc, LootReservations.getApproachPosition(npc, loot), 0.25D);
+                brain.memories.seekingLoot = true;
+                brain.memories.lootTarget = loot;
+                if (!controller.moveTo(npc, LootReservations.getApproachPosition(npc, loot), 0.25D)) {
+                    LootReservations.avoid(npc, loot, UNREACHABLE_COOLDOWN);
+                    npc.getNpcNavigation().markTargetAbandoned();
+                    brain.memories.seekingLoot = false;
+                    brain.memories.lootTarget = null;
+                    brain.memories.lootSearchCooldown = SEARCH_INTERVAL;
+                    this.outPort.fire(context);
+                    return;
+                }
             } else {
                 clear(npc, brain);
             }
@@ -83,7 +89,7 @@ public class SeekLootNode extends ExecutableNode {
 
     private static void clear(FakeNpcEntity npc, NpcBrain brain) {
         LootReservations.release(npc);
-        brain.seekingLoot = false;
-        brain.lootTarget = null;
+        brain.memories.seekingLoot = false;
+        brain.memories.lootTarget = null;
     }
 }

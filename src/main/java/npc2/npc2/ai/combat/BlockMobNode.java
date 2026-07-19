@@ -18,7 +18,6 @@ public class BlockMobNode extends ExecutableNode {
     private static final int MAX_GUARD_TICKS_AFTER_SHOT = 30;
 
     public final SignalPort outPort;
-    private int guardTicksRemaining;
 
     public BlockMobNode(String id) {
         super(id);
@@ -41,45 +40,46 @@ public class BlockMobNode extends ExecutableNode {
             }
 
             if (threat != null && controller.hasShieldEquipped(npc)) {
-                brain.blockingMob = true;
-                brain.blockThreat = threat;
-                this.guardTicksRemaining = calculateGuardTicks(npc, threat);
+                brain.memories.blockingMob = true;
+                brain.memories.blockThreat = threat;
+                brain.memories.guardTicksRemaining = calculateGuardTicks(npc, threat);
                 controller.stopMoving(npc);
                 controller.lookAt(npc, threat.getEyePosition());
                 controller.raiseShield(npc);
-            } else if (brain.blockingMob
+            } else if (brain.memories.blockingMob
                     && controller.hasShieldEquipped(npc)
-                    && this.guardTicksRemaining > 0) {
-                this.guardTicksRemaining--;
+                    && brain.memories.guardTicksRemaining > 0) {
+                brain.memories.guardTicksRemaining--;
                 controller.stopMoving(npc);
-                if (brain.blockThreat != null && brain.blockThreat.isAlive()) {
-                    controller.lookAt(npc, brain.blockThreat.getEyePosition());
+                if (brain.memories.blockThreat != null && brain.memories.blockThreat.isAlive()) {
+                    controller.lookAt(npc, brain.memories.blockThreat.getEyePosition());
                 }
                 controller.raiseShield(npc);
             } else {
-                if (brain.blockingMob) {
+                if (brain.memories.blockingMob) {
                     controller.lowerShield(npc);
                 }
-                this.guardTicksRemaining = 0;
-                brain.blockingMob = false;
-                brain.blockThreat = null;
+                brain.memories.guardTicksRemaining = 0;
+                brain.memories.blockingMob = false;
+                brain.memories.blockThreat = null;
             }
         }
         this.outPort.fire(context);
     }
 
     private static LivingEntity findCreeperThreat(NpcBrain brain, FakeNpcEntity npc, NpcController controller) {
-        if (brain.target instanceof Creeper creeper && controller.shouldBlockCreeper(npc, creeper)) {
+        if (brain.memories.target instanceof Creeper creeper && controller.shouldBlockCreeper(npc, creeper)) {
             return creeper;
         }
         return controller.findThreateningCreeper(npc, 8.0D);
     }
 
     private static LivingEntity findRangedThreat(NpcBrain brain, FakeNpcEntity npc, NpcController controller) {
-        if (brain.target != null && controller.shouldBlockRangedAttack(npc, brain.target)) {
-            return brain.target;
+        if (brain.memories.target != null && controller.shouldBlockRangedAttack(npc, brain.memories.target)) {
+            return brain.memories.target;
         }
-        return controller.findThreateningRangedAttacker(npc, RANGED_THREAT_RADIUS);
+        double radius = npc.isSleeping() ? RANGED_THREAT_RADIUS * 0.25D : RANGED_THREAT_RADIUS;
+        return controller.findThreateningRangedAttacker(npc, radius);
     }
 
     private static int calculateGuardTicks(FakeNpcEntity npc, LivingEntity threat) {

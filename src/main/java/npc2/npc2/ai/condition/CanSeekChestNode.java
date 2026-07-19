@@ -19,24 +19,25 @@ public class CanSeekChestNode extends ConditionNode {
 
     @Override
     protected boolean evaluateCondition() {
-        boolean combatTooClose = this.brain.target != null
-                && this.brain.target.isAlive()
-                && this.brain.npc.distanceTo(this.brain.target) < this.safeCombatDistance;
-        boolean allowed = !this.brain.blockingMob
-                && !this.brain.retreating
-                && !this.brain.seekingLoot
-                && !this.brain.seekingBed
-                && !this.brain.depositing
-                && !this.brain.gatheringResource
-                && !this.brain.seekingCraftingTable
-                && !this.brain.processingFurnace
+        boolean combatTooClose = this.brain.memories.target != null
+                && this.brain.memories.target.isAlive()
+                && this.brain.npc.distanceTo(this.brain.memories.target) < this.safeCombatDistance;
+        boolean allowed = !this.brain.memories.blockingMob
+                && !this.brain.memories.retreating
+                && !this.brain.memories.returningHome
+                && !this.brain.memories.seekingLoot
+                && !this.brain.memories.seekingBed
+                && !this.brain.memories.depositing
+                && !this.brain.memories.gatheringResource
+                && !this.brain.memories.seekingCraftingTable
+                && !this.brain.memories.processingFurnace
                 && !this.brain.npc.isSleeping()
                 && !combatTooClose;
         if (!allowed) {
-            if (!this.brain.depositing) ChestLooting.release(this.brain.npc);
-            this.brain.chestLootTarget = null;
-            this.brain.chestTarget = null;
-            this.brain.seekingChest = false;
+            if (!this.brain.memories.depositing) ChestLooting.release(this.brain.npc);
+            this.brain.memories.chestLootTarget = null;
+            this.brain.memories.chestTarget = null;
+            this.brain.memories.seekingChest = false;
         }
         return allowed;
     }

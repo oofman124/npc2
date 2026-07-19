@@ -9,6 +9,8 @@ import net.minecraft.world.phys.Vec3;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.NpcController;
 import npc2.npc2.ai.NpcBrain;
+import npc2.npc2.ai.NpcContext;
+import npc2.npc2.ai.survival.SurvivalPlanner;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -20,7 +22,6 @@ public class WanderNode extends ExecutableNode {
 
     public Vec3 bounds = new Vec3(5, 5, 5);
     public final SignalPort outPort;
-    private int cooldown;
 
     public WanderNode(String id, @Nullable Vec3 bounds) {
         super(id);
@@ -40,54 +41,62 @@ public class WanderNode extends ExecutableNode {
         if (context.get("Npc") instanceof FakeNpcEntity npc &&
             context.get("Controller") instanceof NpcController controller) {
             NpcBrain brain = (context.get("Brain") instanceof NpcBrain storedBrain) ? storedBrain : null;
-            boolean productionPlanned = brain != null && brain.hasProductionPlan();
-            if (brain != null && (brain.target != null || brain.blockingMob || brain.floating || brain.seekingLoot
-                    || brain.seekingChest || brain.seekingBed || brain.depositing || brain.gatheringResource
-                    || brain.seekingCraftingTable || brain.processingFurnace || productionPlanned || npc.isSleeping())) {
-                brain.wanderTarget = null;
+            SurvivalPlanner.Plan plan = context.get(NpcContext.PLAN) instanceof SurvivalPlanner.Plan tickPlan
+                    ? tickPlan : brain != null ? brain.memories.plan : null;
+            boolean gatheringPlanned = plan != null && plan.shouldGather();
+            boolean productionPlanned = plan != null && !gatheringPlanned
+                    && plan.action() != SurvivalPlanner.Action.NONE;
+            if (brain != null && (brain.memories.target != null || brain.memories.blockingMob || brain.memories.floating || brain.memories.seekingLoot
+                    || brain.memories.seekingChest || brain.memories.seekingBed || brain.memories.depositing || brain.memories.gatheringResource
+                    || brain.memories.seekingCraftingTable || brain.memories.processingFurnace || brain.memories.returningHome
+                    || productionPlanned || gatheringPlanned
+                    || npc.isSleeping())) {
+                brain.memories.wanderTarget = null;
                 this.outPort.fire(context);
                 return;
             }
 
-            if (brain != null && brain.wanderTarget != null) {
-                boolean arrived = npc.distanceToSqr(brain.wanderTarget) <= ARRIVAL_DISTANCE_SQR;
+            if (brain != null && brain.memories.wanderTarget != null) {
+                boolean arrived = npc.distanceToSqr(brain.memories.wanderTarget) <= ARRIVAL_DISTANCE_SQR;
                 boolean routeFailed = npc.getNpcNavigation().shouldAbandonTarget()
                         || (npc.getNpcNavigation().isDone() && !arrived);
                 if (routeFailed) {
-                    brain.wanderTarget = null;
+                    brain.memories.wanderTarget = null;
                     npc.getNpcNavigation().markTargetAbandoned();
-                    this.cooldown = RETRY_INTERVAL;
+                    brain.memories.wanderCooldown = RETRY_INTERVAL;
                 } else if (arrived) {
-                    brain.wanderTarget = null;
+                    brain.memories.wanderTarget = null;
                     controller.stopMoving(npc);
-                    this.cooldown = WANDER_INTERVAL;
+                    brain.memories.wanderCooldown = WANDER_INTERVAL;
                 } else {
-                    boolean moving = controller.moveTo(npc, brain.wanderTarget, 0.22D);
+                    boolean moving = controller.moveTo(npc, brain.memories.wanderTarget, 0.22D);
                     if (!moving || !npc.getNpcNavigation().pathActuallyReachesTarget()) {
-                        brain.wanderTarget = null;
+                        brain.memories.wanderTarget = null;
                         npc.getNpcNavigation().markTargetAbandoned();
-                        this.cooldown = RETRY_INTERVAL;
+                        brain.memories.wanderCooldown = RETRY_INTERVAL;
                     }
                     this.outPort.fire(context);
                     return;
                 }
             }
 
-            if (this.cooldown > 0) {
-                this.cooldown--;
+            if (brain != null && brain.memories.wanderCooldown > 0) {
+                brain.memories.wanderCooldown--;
                 this.outPort.fire(context);
                 return;
             }
 
             Vec3 target = findReachableTarget(npc);
-            this.cooldown = target == null ? RETRY_INTERVAL : WANDER_INTERVAL;
+            if (brain != null) {
+                brain.memories.wanderCooldown = target == null ? RETRY_INTERVAL : WANDER_INTERVAL;
+            }
             if (brain != null && target != null) {
-                brain.wanderTarget = target;
+                brain.memories.wanderTarget = target;
                 if (!controller.moveTo(npc, target, 0.22D)
                         || !npc.getNpcNavigation().pathActuallyReachesTarget()) {
-                    brain.wanderTarget = null;
+                    brain.memories.wanderTarget = null;
                     npc.getNpcNavigation().markTargetAbandoned();
-                    this.cooldown = RETRY_INTERVAL;
+                    brain.memories.wanderCooldown = RETRY_INTERVAL;
                 }
             }
         }

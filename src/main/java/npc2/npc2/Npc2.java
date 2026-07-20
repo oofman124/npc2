@@ -16,6 +16,7 @@ public class Npc2 implements ModInitializer {
 		LOGGER.info("Initializing NPC2 survival NPCs");
 		ModEntities.register();
 		ModItems.register();
+		ModCreativeTabs.register();
 		NpcDebugNetworking.register();
 	}
 

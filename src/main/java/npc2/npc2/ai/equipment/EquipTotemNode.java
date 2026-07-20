@@ -6,6 +6,7 @@ import io.github.oofman124.asterisk.ports.SignalPort;
 import io.github.oofman124.asterisk.ports.SignalPortMode;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.NpcController;
+import npc2.npc2.ai.NpcContext;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
@@ -21,6 +22,7 @@ public class EquipTotemNode extends ExecutableNode {
     @Override
     protected void onExecute(Context context) {
         if (context != null
+                && Boolean.TRUE.equals(context.get(NpcContext.EQUIPMENT_UPDATE))
                 && context.get("Npc") instanceof FakeNpcEntity npc
                 && context.get("Controller") instanceof NpcController controller) {
             controller.equipTotem(npc);

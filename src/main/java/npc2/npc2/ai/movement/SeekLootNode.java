@@ -88,7 +88,9 @@ public class SeekLootNode extends ExecutableNode {
     }
 
     private static void clear(FakeNpcEntity npc, NpcBrain brain) {
-        LootReservations.release(npc);
+        if (brain.memories.seekingLoot || brain.memories.lootTarget != null) {
+            LootReservations.release(npc);
+        }
         brain.memories.seekingLoot = false;
         brain.memories.lootTarget = null;
     }

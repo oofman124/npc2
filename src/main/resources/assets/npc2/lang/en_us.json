@@ -1,5 +1,6 @@
 {
   "entity.npc2.fake_npc": "Survivor NPC",
   "item.npc2.fake_npc_spawn_egg": "Survivor NPC Spawn Egg",
+  "itemGroup.npc2": "NPC2",
   "key.npc2.pin_debug": "Pin NPC Debug Panel"
 }

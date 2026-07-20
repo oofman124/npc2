@@ -50,10 +50,24 @@ public final class NpcPathNavigation {
 			this.pathRecalcDelay--;
 		}
 
-		if (this.navigation.getPath() != null
+		Path activePath = this.navigation.getPath();
+		boolean sameTarget = target.distanceToSqr(this.lastTargetPos) < 4.0D;
+		// A valid path to a static target does not need to be rebuilt every 15
+		// ticks. Replacing it while crossing a cave mouth or uneven step can turn
+		// a working route into a transient partial path and make higher-level AI
+		// abandon the target. Moving targets still trigger recalculation through
+		// targetChanged, and completed/invalid paths continue through below.
+		if (activePath != null
 			&& !this.navigation.isDone()
-			&& target.distanceToSqr(this.lastTargetPos) < 4.0D
-			&& this.pathRecalcDelay > 0) {
+			&& sameTarget
+			&& pathActuallyReaches(activePath, target)) {
+			this.navigation.setSpeedModifier(toSpeedModifier(speed));
+			this.consecutiveFailures = 0;
+			return true;
+		}
+		// Throttle retries for an existing partial path so expensive pathfinding
+		// does not run on every tick while progress/recovery counters accumulate.
+		if (activePath != null && !this.navigation.isDone() && sameTarget && this.pathRecalcDelay > 0) {
 			this.navigation.setSpeedModifier(toSpeedModifier(speed));
 			return true;
 		}
@@ -119,6 +133,10 @@ public final class NpcPathNavigation {
 
 	public int getPartialPathTicks() {
 		return this.partialPathTicks;
+	}
+
+	public int getConsecutiveFailures() {
+		return this.consecutiveFailures;
 	}
 
 	public boolean pathActuallyReachesTarget() {

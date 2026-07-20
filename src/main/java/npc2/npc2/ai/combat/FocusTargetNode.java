@@ -33,6 +33,7 @@ public class FocusTargetNode extends ExecutableNode {
             context.get("Controller") instanceof NpcController controller &&
             !brain.memories.blockingMob &&
             !brain.memories.retreating &&
+            !brain.memories.floating &&
             !brain.memories.seekingLoot &&
             !brain.memories.seekingChest &&
             !brain.memories.seekingBed &&

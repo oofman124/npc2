@@ -309,7 +309,6 @@ public final class ChestLooting {
         else if (stack.is(Items.IRON_INGOT)) excess = bag.countItem(Items.IRON_INGOT) - 16;
         else if (stack.is(Items.RAW_IRON))
             excess = bag.countItem(Items.RAW_IRON) + bag.countItem(Items.IRON_INGOT) - SurvivalNeeds.IRON_TARGET;
-        else if (stack.is(Items.DIAMOND)) excess = bag.countItem(Items.DIAMOND) - SurvivalNeeds.DIAMOND_TARGET;
         else if (stack.is(Items.COBBLESTONE)) excess = bag.countItem(Items.COBBLESTONE) - SurvivalNeeds.COBBLESTONE_TARGET;
         else if (stack.is(Items.DIRT)) excess = bag.countItem(Items.DIRT) - SurvivalNeeds.SOIL_TARGET;
         else if (stack.is(Items.NETHERRACK)) excess = bag.countItem(Items.NETHERRACK) - SurvivalNeeds.SOIL_TARGET;

@@ -30,7 +30,8 @@ public final class BlockInteractionStations {
         ServerLevel level = (ServerLevel)npc.level();
         prune(level);
         NpcMemories.RememberedStation known = npc.getMemories().knownStations.get(kind);
-        Target remembered = known != null && known.dimension().equals(level.dimension()) ? known.target() : null;
+        Target remembered = known != null && known.dimension().equals(level.dimension())
+                && level.hasChunkAt(known.target().blockPos) ? known.target() : null;
         if (remembered != null && isUsable(npc, remembered)) {
             Vec3 approach = ReachableApproach.beside(npc, remembered.blockPos);
             if (approach != null) return new Target(kind, remembered.blockPos, approach);
@@ -42,7 +43,7 @@ public final class BlockInteractionStations {
         BlockPos origin = npc.blockPosition();
         List<BlockPos> candidates = new ArrayList<>();
         for (BlockPos pos : BlockPos.withinManhattan(origin, radius, 6, radius)) {
-            if (kind.matches(level.getBlockState(pos)) && isAvailable(npc, kind, pos)) {
+            if (level.hasChunkAt(pos) && kind.matches(level.getBlockState(pos)) && isAvailable(npc, kind, pos)) {
                 candidates.add(pos.immutable());
             }
         }
@@ -57,6 +58,7 @@ public final class BlockInteractionStations {
     public static boolean hasKnownTarget(FakeNpcEntity npc, Kind kind) {
         NpcMemories.RememberedStation known = npc.getMemories().knownStations.get(kind);
         return known != null && known.dimension().equals(((ServerLevel)npc.level()).dimension())
+                && npc.level().hasChunkAt(known.target().blockPos)
                 && kind.matches(npc.level().getBlockState(known.target().blockPos));
     }
 

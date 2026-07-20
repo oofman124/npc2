@@ -17,16 +17,20 @@ public class CanSeekGroundLootNode extends ConditionNode {
 
     @Override
     protected boolean evaluateCondition() {
-        boolean allowed = !this.brain.memories.blockingMob
+        boolean allowed = this.brain.memories.target == null
+                && !this.brain.memories.blockingMob
                 && !this.brain.memories.retreating
+                && !this.brain.memories.floating
                 && !this.brain.memories.returningHome
+                && !this.brain.memories.seekingChest
                 && !this.brain.memories.seekingBed
                 && !this.brain.memories.depositing
                 && !this.brain.memories.gatheringResource
                 && !this.brain.memories.seekingCraftingTable
                 && !this.brain.memories.processingFurnace
                 && !this.brain.npc.isSleeping();
-        if (!allowed) {
+        if (!allowed && (this.brain.memories.seekingLoot
+                || this.brain.memories.lootTarget != null)) {
             LootReservations.release(this.brain.npc);
             this.brain.memories.seekingLoot = false;
             this.brain.memories.lootTarget = null;

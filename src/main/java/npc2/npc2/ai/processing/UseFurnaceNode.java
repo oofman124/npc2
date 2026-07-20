@@ -31,15 +31,27 @@ public class UseFurnaceNode extends ExecutableNode {
         if (context != null && context.get("Brain") instanceof NpcBrain brain) {
             if (brain.memories.furnaceTarget != null
                     && !BlockInteractionStations.isUsable(brain.npc, brain.memories.furnaceTarget)) clear(brain);
-            if (brain.memories.furnaceTarget == null && brain.memories.furnaceSearchCooldown-- <= 0) {
+            boolean placementActive = CarriedStationPlacement.isActive(
+                    brain, BlockInteractionStations.Kind.FURNACE);
+            if (brain.memories.furnaceTarget == null
+                    && (placementActive || brain.memories.furnaceSearchCooldown-- <= 0)) {
                 brain.memories.furnaceSearchCooldown = SEARCH_INTERVAL;
-                BlockInteractionStations.Target candidate = BlockInteractionStations.findTarget(
-                        brain.npc, BlockInteractionStations.Kind.FURNACE, this.radius);
+                BlockInteractionStations.Target candidate = placementActive ? null
+                        : BlockInteractionStations.findTarget(
+                                brain.npc, BlockInteractionStations.Kind.FURNACE, this.radius);
                 if (candidate == null) {
-                    candidate = CarriedStationPlacement.place(
+                    CarriedStationPlacement.Result placement = CarriedStationPlacement.tick(
                             brain, Items.FURNACE, BlockInteractionStations.Kind.FURNACE);
+                    candidate = placement.target();
+                    if (candidate == null && placement.state() != CarriedStationPlacement.State.UNAVAILABLE) {
+                        brain.memories.furnaceSearchCooldown = placement.state() == CarriedStationPlacement.State.SEARCHING
+                                ? 10 : 0;
+                        this.outPort.fire(context);
+                        return;
+                    }
                 }
                 if (candidate != null && BlockInteractionStations.claim(brain.npc, candidate)) {
+                    CarriedStationPlacement.clear(brain, BlockInteractionStations.Kind.FURNACE);
                     brain.memories.furnaceTarget = candidate;
                     brain.memories.processingFurnace = true;
                 } else if (candidate == null) {
@@ -85,6 +97,7 @@ public class UseFurnaceNode extends ExecutableNode {
 
     private static void clear(NpcBrain brain) {
         BlockInteractionStations.release(brain.npc, BlockInteractionStations.Kind.FURNACE);
+        CarriedStationPlacement.clear(brain, BlockInteractionStations.Kind.FURNACE);
         brain.memories.furnaceTarget = null;
         brain.memories.processingFurnace = false;
     }

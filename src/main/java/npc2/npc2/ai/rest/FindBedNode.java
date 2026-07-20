@@ -24,6 +24,12 @@ public class FindBedNode extends ExecutableNode {
     @Override
     protected void onExecute(Context context) {
         if (context != null && context.get("Brain") instanceof NpcBrain brain) {
+            if (!brain.memories.bedSearchInitialized) {
+                brain.memories.bedSearchCooldown = brain.memories.returningHome
+                        ? Math.floorMod(brain.npc.getId() + 1, 3)
+                        : Math.floorMod(brain.npc.getId() + 19, SEARCH_INTERVAL);
+                brain.memories.bedSearchInitialized = true;
+            }
             if (brain.memories.bedTarget != null && !BedReservations.isStillUsable(brain.npc, brain.memories.bedTarget)) {
                 BedReservations.release(brain.npc);
                 brain.memories.bedTarget = null;

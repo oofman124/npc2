@@ -3,6 +3,8 @@ package npc2.npc2.ai.condition;
 import io.github.oofman124.asterisk.nodes.ConditionNode;
 import npc2.npc2.ai.NpcBrain;
 import npc2.npc2.ai.crafting.CraftingStations;
+import npc2.npc2.ai.interaction.BlockInteractionStations;
+import npc2.npc2.ai.interaction.CarriedStationPlacement;
 import npc2.npc2.ai.survival.SurvivalPlanner;
 import org.jspecify.annotations.NullMarked;
 
@@ -25,9 +27,13 @@ public class CanUseCraftingTableNode extends ConditionNode {
                 && !this.brain.npc.isSleeping();
         if (!safe || this.brain.memories.plan.shouldGather()
                 || this.brain.memories.plan.action() != SurvivalPlanner.Action.CRAFTING_TABLE) {
-            CraftingStations.release(this.brain.npc);
+            if (this.brain.memories.seekingCraftingTable
+                    || this.brain.memories.craftingTableTarget != null) {
+                CraftingStations.release(this.brain.npc);
+            }
             this.brain.memories.craftingTableTarget = null;
             this.brain.memories.seekingCraftingTable = false;
+            CarriedStationPlacement.clear(this.brain, BlockInteractionStations.Kind.CRAFTING_TABLE);
             return false;
         }
         // Claim the work intent before station discovery so idle/wander cannot take over

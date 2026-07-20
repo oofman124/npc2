@@ -16,7 +16,17 @@ public class InWaterNode extends ConditionNode {
 
     @Override
     protected boolean evaluateCondition() {
-        this.brain.memories.floating = this.brain.npc.isInWater();
+        boolean wasFloating = this.brain.memories.floating;
+        boolean floating = this.brain.npc.isInWater();
+        if (floating != wasFloating) {
+            // Water recovery owns navigation until dry land is reached. Cancel the
+            // previous work path so it cannot keep recalculating under the float node.
+            this.brain.controller.stopMoving(this.brain.npc);
+            this.brain.npc.getNpcNavigation().markTargetAbandoned();
+            this.brain.memories.waterEscapeTarget = null;
+            this.brain.memories.waterEscapeCooldown = 0;
+        }
+        this.brain.memories.floating = floating;
         return this.brain.memories.floating;
     }
 }

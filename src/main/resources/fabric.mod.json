@@ -3,10 +3,15 @@
 	"id": "npc2",
 	"version": "${version}",
 	"name": "npc2",
-	"description": "Autonomous survival NPCs with combat, looting, crafting, gathering, sleeping, and pathfinding.",
+	"description": "npc2 adds autonomous survival NPCs with combat, looting, crafting, gathering, sleeping, and pathfinding.",
 	"authors": [
-		"Me!"
+		"oofman124"
 	],
+	"contact": {
+		"homepage": "https://github.com/oofman124/npc2",
+		"sources": "https://github.com/oofman124/npc2",
+		"issues": "https://github.com/oofman124/npc2/issues"
+	},
 	"license": "MIT",
 	"icon": "assets/npc2/icon.png",
 	"environment": "*",

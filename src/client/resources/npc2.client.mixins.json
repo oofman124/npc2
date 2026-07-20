@@ -2,9 +2,7 @@
 	"required": true,
 	"package": "npc2.npc2.client.mixin",
 	"compatibilityLevel": "JAVA_25",
-	"client": [
-		"ExampleClientMixin"
-	],
+	"client": [],
 	"injectors": {
 		"defaultRequire": 1
 	},

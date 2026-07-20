@@ -9,16 +9,16 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.ItemStack;
 
-/** Creative inventory home for NPC2's tools and spawn items. */
+/** Creative inventory home for npc2's tools and spawn items. */
 public final class ModCreativeTabs {
-    public static final ResourceKey<CreativeModeTab> NPC2_TAB_KEY =
+    public static final ResourceKey<CreativeModeTab> TAB_KEY =
             ResourceKey.create(Registries.CREATIVE_MODE_TAB, Npc2.id("npc2"));
 
     private ModCreativeTabs() {
     }
 
     public static void register() {
-        Registry.register(BuiltInRegistries.CREATIVE_MODE_TAB, NPC2_TAB_KEY,
+        Registry.register(BuiltInRegistries.CREATIVE_MODE_TAB, TAB_KEY,
                 FabricCreativeModeTab.builder()
                         .title(Component.translatable("itemGroup.npc2"))
                         .icon(() -> new ItemStack(ModItems.FAKE_NPC_SPAWN_EGG))

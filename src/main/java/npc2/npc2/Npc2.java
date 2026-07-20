@@ -13,7 +13,7 @@ public class Npc2 implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		LOGGER.info("Initializing NPC2 survival NPCs");
+		LOGGER.info("Initializing npc2 survival NPCs");
 		ModEntities.register();
 		ModItems.register();
 		ModCreativeTabs.register();

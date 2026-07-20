@@ -9,8 +9,6 @@ import net.minecraft.world.phys.Vec3;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.NpcController;
 import npc2.npc2.ai.NpcBrain;
-import npc2.npc2.ai.NpcContext;
-import npc2.npc2.ai.survival.SurvivalPlanner;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -41,16 +39,7 @@ public class WanderNode extends ExecutableNode {
         if (context.get("Npc") instanceof FakeNpcEntity npc &&
             context.get("Controller") instanceof NpcController controller) {
             NpcBrain brain = (context.get("Brain") instanceof NpcBrain storedBrain) ? storedBrain : null;
-            SurvivalPlanner.Plan plan = context.get(NpcContext.PLAN) instanceof SurvivalPlanner.Plan tickPlan
-                    ? tickPlan : brain != null ? brain.memories.plan : null;
-            boolean gatheringPlanned = plan != null && plan.shouldGather();
-            boolean productionPlanned = plan != null && !gatheringPlanned
-                    && plan.action() != SurvivalPlanner.Action.NONE;
-            if (brain != null && (brain.memories.target != null || brain.memories.blockingMob || brain.memories.floating || brain.memories.seekingLoot
-                    || brain.memories.seekingChest || brain.memories.seekingBed || brain.memories.depositing || brain.memories.gatheringResource
-                    || brain.memories.seekingCraftingTable || brain.memories.processingFurnace || brain.memories.returningHome
-                    || productionPlanned || gatheringPlanned
-                    || npc.isSleeping())) {
+            if (brain != null && !brain.allowsWandering()) {
                 brain.memories.wanderTarget = null;
                 this.outPort.fire(context);
                 return;

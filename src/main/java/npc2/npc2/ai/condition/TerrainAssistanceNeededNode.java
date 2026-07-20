@@ -2,6 +2,7 @@ package npc2.npc2.ai.condition;
 
 import io.github.oofman124.asterisk.nodes.ConditionNode;
 import npc2.npc2.ai.NpcBrain;
+import npc2.npc2.ai.NpcTickSchedule;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
@@ -16,13 +17,11 @@ public class TerrainAssistanceNeededNode extends ConditionNode {
 
     @Override
     protected boolean evaluateCondition() {
-        if (++this.brain.memories.terrainAssistanceTicks < CHECK_INTERVAL) {
-            return false;
-        }
-        this.brain.memories.terrainAssistanceTicks = 0;
-        return this.brain.npc.getNpcNavigation().needsRecovery()
+        return NpcTickSchedule.due(this.brain.npc, CHECK_INTERVAL, 1)
+                && this.brain.npc.getNpcNavigation().needsRecovery()
                 && !this.brain.memories.blockingMob
                 && !this.brain.memories.retreating
+                && !this.brain.memories.floating
                 && !this.brain.npc.isSleeping();
     }
 }

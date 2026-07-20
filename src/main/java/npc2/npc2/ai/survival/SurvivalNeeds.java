@@ -8,8 +8,9 @@ import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.NpcController;
 import npc2.npc2.ai.CoolEntity;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.entity.ai.village.poi.PoiManager;
+import net.minecraft.world.entity.ai.village.poi.PoiTypes;
+import npc2.npc2.ai.rest.NpcHome;
 
 /** Shared, normalized need scores used by gathering, hunting, crafting, and storage policies. */
 public final class SurvivalNeeds {
@@ -20,7 +21,6 @@ public final class SurvivalNeeds {
     public static final int FUEL_TARGET = 8;
     public static final int TORCH_TARGET = 16;
     public static final int IRON_TARGET = 12;
-    public static final int DIAMOND_TARGET = 6;
 
     private SurvivalNeeds() {
     }
@@ -64,14 +64,19 @@ public final class SurvivalNeeds {
     }
 
     public static boolean hasBedAvailable(FakeNpcEntity npc) {
-        return ownsBed(npc) || hasBedBlockNearby(npc);
+        return ownsBed(npc) || NpcHome.validate(npc) || hasBedBlockNearby(npc);
     }
 
     public static boolean hasBedBlockNearby(FakeNpcEntity npc) {
-        for (BlockPos pos : BlockPos.withinManhattan(npc.blockPosition(), 12, 4, 12)) {
-            if (npc.level().getBlockState(pos).getBlock() instanceof BedBlock) return true;
-        }
-        return false;
+        if (!(npc.level() instanceof ServerLevel level)) return false;
+        return level.getPoiManager().findAll(
+                        holder -> holder.is(PoiTypes.HOME),
+                        pos -> true,
+                        npc.blockPosition(),
+                        12,
+                        PoiManager.Occupancy.ANY)
+                .findAny()
+                .isPresent();
     }
 
     /** Midnight fallback after bed search and carried-bed placement have both failed. */

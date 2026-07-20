@@ -33,7 +33,8 @@ public class SeekChestNode extends ExecutableNode {
                 && context.get("Npc") instanceof FakeNpcEntity npc
                 && context.get("Controller") instanceof NpcController controller) {
             if (!brain.memories.chestSearchInitialized) {
-                brain.memories.chestSearchCooldown = Math.floorMod(npc.getId(), SEARCH_INTERVAL);
+                // Offset from ground-loot searches so both world scans are not due together.
+                brain.memories.chestSearchCooldown = Math.floorMod(npc.getId() + 7, SEARCH_INTERVAL);
                 brain.memories.chestSearchInitialized = true;
             }
             if (brain.memories.chestLootTarget != null && !ChestLooting.isStillDesirable(npc, controller, brain.memories.chestLootTarget)) {

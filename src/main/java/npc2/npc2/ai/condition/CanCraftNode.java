@@ -20,6 +20,9 @@ public class CanCraftNode extends ConditionNode {
                 && !this.brain.memories.retreating
                 && !this.brain.memories.returningHome
                 && !this.brain.memories.floating
+                && !this.brain.memories.seekingLoot
+                && !this.brain.memories.seekingChest
+                && !this.brain.memories.seekingBed
                 && !this.brain.memories.depositing
                 && !this.brain.memories.gatheringResource
                 && !this.brain.memories.seekingCraftingTable

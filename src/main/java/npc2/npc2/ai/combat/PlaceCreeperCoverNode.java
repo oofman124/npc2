@@ -14,6 +14,7 @@ import net.minecraft.world.item.ItemStack;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.NpcController;
 import npc2.npc2.ai.NpcBrain;
+import npc2.npc2.ai.NpcContext;
 import org.jspecify.annotations.NullMarked;
 
 /** Places immediate blast cover when an ignited creeper threatens an unshielded NPC. */
@@ -37,10 +38,11 @@ public final class PlaceCreeperCoverNode extends ExecutableNode {
             if (brain.memories.creeperCoverCooldown > 0) {
                 brain.memories.creeperCoverCooldown--;
             } else if (!controller.hasShieldEquipped(npc)) {
-                Creeper creeper = brain.memories.target instanceof Creeper target
+                Creeper creeper = context.get(NpcContext.DEFENSE_THREAT) instanceof Creeper scanned
+                        && controller.shouldBlockCreeper(npc, scanned) ? scanned
+                        : brain.memories.target instanceof Creeper target
                         && controller.shouldBlockCreeper(npc, target)
-                        ? target
-                        : controller.findThreateningCreeper(npc, 8.0D);
+                        ? target : null;
                 if (creeper != null && placeCover(npc, controller, creeper)) {
                     brain.memories.creeperCoverCooldown = PLACEMENT_COOLDOWN;
                 }

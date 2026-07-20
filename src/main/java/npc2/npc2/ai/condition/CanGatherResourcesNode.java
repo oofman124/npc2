@@ -23,9 +23,15 @@ public class CanGatherResourcesNode extends ConditionNode {
                 && !this.brain.memories.processingFurnace && !this.brain.npc.isSleeping()
                 && this.brain.memories.plan.shouldGather();
         if (!allowed) {
-            BlockResourceGathering.release(this.brain.npc);
+            if (this.brain.memories.gatheringResource
+                    || this.brain.memories.resourceTarget != null
+                    || this.brain.memories.resourceSearch != null) {
+                BlockResourceGathering.release(this.brain.npc);
+            }
             this.brain.memories.resourceTarget = null;
+            this.brain.memories.resourceSearch = null;
             this.brain.memories.gatheringResource = false;
+            this.brain.memories.exploringForResources = false;
         }
         return allowed;
     }

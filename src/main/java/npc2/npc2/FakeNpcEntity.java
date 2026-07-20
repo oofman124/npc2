@@ -16,6 +16,7 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ContainerUser;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -153,6 +154,20 @@ public class FakeNpcEntity extends PathfinderMob implements ContainerUser {
 
 	public NpcMemories getMemories() {
 		return this.memories;
+	}
+
+	/**
+	 * Enters the vanilla sleeping pose without applying the height of a bed to the
+	 * entity. {@link LivingEntity#startSleeping(BlockPos)} always places a sleeper
+	 * {@code 0.6875} blocks above the supplied block because it assumes that block
+	 * is a bed. For floor sleep, the NPC's current feet position is already the
+	 * floor surface, so retain that surface and only add vanilla's 1/8-block model
+	 * clearance.
+	 */
+	public void startSleepingOnFloor(BlockPos position) {
+		double floorSurfaceY = this.getY();
+		this.startSleeping(position);
+		this.setPos(position.getX() + 0.5D, floorSurfaceY + 0.125D, position.getZ() + 0.5D);
 	}
 
 	@Override

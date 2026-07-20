@@ -9,14 +9,18 @@ import net.minecraft.world.phys.Vec3;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.ai.crafting.CraftingStations;
 import npc2.npc2.ai.interaction.BlockInteractionStations;
+import npc2.npc2.ai.interaction.CarriedStationPlacement;
 import npc2.npc2.ai.movement.BlockResourceGathering;
 import npc2.npc2.ai.movement.ChestLooting;
+import npc2.npc2.ai.movement.ResourceSurveyor;
 import npc2.npc2.ai.rest.BedReservations;
 import npc2.npc2.ai.survival.SurvivalPlanner;
 import org.jspecify.annotations.Nullable;
 
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -25,7 +29,7 @@ import java.util.UUID;
  * Node objects keep configuration only; their counters and targets live here.
  */
 public final class NpcMemories {
-    // Current weighted plan, also copied into each tick's generated event context.
+    // Current weighted plan, refreshed on a staggered schedule and exposed by graph context.
     public SurvivalPlanner.Plan plan = new SurvivalPlanner.Plan(
             Map.of(), SurvivalPlanner.Action.NONE, 0.0D);
 
@@ -44,6 +48,8 @@ public final class NpcMemories {
     // General movement.
     public @Nullable Vec3 wanderTarget;
     public boolean floating;
+    public @Nullable Vec3 waterEscapeTarget;
+    public int waterEscapeCooldown;
     public int wanderCooldown;
     public int idleTicks;
 
@@ -59,7 +65,6 @@ public final class NpcMemories {
     public boolean chestSearchInitialized;
     public boolean depositing;
     public ChestLooting.@Nullable Target chestDepositTarget;
-    public int depositCheckTicks;
     public @Nullable ResourceKey<Level> openChestDimension;
     public @Nullable BlockPos openChestPosition;
     public @Nullable BlockPos openChestPartnerPosition;
@@ -68,9 +73,12 @@ public final class NpcMemories {
     // Gathering and production.
     public boolean gatheringResource;
     public BlockResourceGathering.@Nullable Target resourceTarget;
+    public BlockResourceGathering.@Nullable Search resourceSearch;
     public int resourceSearchCooldown;
     public int resourceWorkTicks;
     public boolean resourceSearchInitialized;
+    public boolean exploringForResources;
+    public ResourceSurveyor.@Nullable Survey resourceSurvey;
     public boolean seekingCraftingTable;
     public CraftingStations.@Nullable Target craftingTableTarget;
     public int craftingSearchCooldown;
@@ -79,6 +87,10 @@ public final class NpcMemories {
     public boolean processingFurnace;
     public BlockInteractionStations.@Nullable Target furnaceTarget;
     public int furnaceSearchCooldown;
+    public final EnumMap<BlockInteractionStations.Kind, CarriedStationPlacement.PlacementSite> stationPlacementSites =
+            new EnumMap<>(BlockInteractionStations.Kind.class);
+    public final EnumMap<BlockInteractionStations.Kind, Vec3> stationRelocationTargets =
+            new EnumMap<>(BlockInteractionStations.Kind.class);
 
     // Rest and local interaction.
     public boolean seekingBed;
@@ -91,77 +103,151 @@ public final class NpcMemories {
     public boolean returningHome;
     public long homeUnavailableUntil;
     public int bedSearchCooldown;
+    public boolean bedSearchInitialized;
     public int campPreparationCooldown;
     public @Nullable BlockPos doorTarget;
 
     // Periodic maintenance.
     public int eatCooldown;
-    public int inventoryMaintenanceTicks;
-    public int terrainAssistanceTicks;
 
     // Per-NPC memories previously held in shared static maps.
     public final Map<UUID, Long> avoidedLootUntil = new HashMap<>();
     public final Map<RememberedBlock, Long> avoidedResourceBlocksUntil = new HashMap<>();
     public final EnumMap<BlockInteractionStations.Kind, RememberedStation> knownStations =
             new EnumMap<>(BlockInteractionStations.Kind.class);
-    private final EnumMap<SurvivalPlanner.Resource, ResourceMiss> resourceMisses =
+    private final EnumMap<SurvivalPlanner.Resource, LinkedHashMap<RememberedBlock, Long>> knownResources =
+            new EnumMap<>(SurvivalPlanner.Resource.class);
+    private final EnumMap<SurvivalPlanner.Resource, ResourceAvailability> resourceAvailability =
             new EnumMap<>(SurvivalPlanner.Resource.class);
 
+    /** Apply learned local availability to a raw need without deleting the need itself. */
     public ResourceAdjustment adjustResourceScore(FakeNpcEntity npc, SurvivalPlanner.Resource resource,
-                                                   double score) {
-        ResourceMiss miss = this.resourceMisses.get(resource);
-        if (miss == null || !miss.dimension.equals(npc.level().dimension())) {
-            return new ResourceAdjustment(score, 1.0D);
-        }
-        long now = npc.level().getGameTime();
-        if (miss.until <= now) {
-            this.resourceMisses.remove(resource);
-            return new ResourceAdjustment(score, 1.0D);
-        }
-        double confidence = miss.count >= 2 ? 0.0D : 0.25D;
-        return new ResourceAdjustment(score * confidence, confidence);
+                                                   double rawScore) {
+        AvailabilitySnapshot availability = resourceAvailability(npc, resource);
+        return new ResourceAdjustment(rawScore * availability.confidence(), availability.confidence(),
+                availability.failures(), availability.ticksUntilRecovery());
     }
 
-    public boolean recordResourceMiss(FakeNpcEntity npc, SurvivalPlanner.Plan plan) {
-        SurvivalPlanner.Need need = plan.highestGatheringNeed();
-        if (need == null) return false;
+    /**
+     * Record that a complete bounded search found no usable example of a resource.
+     * Failures are rate limited so fast node ticks cannot collapse a score instantly.
+     */
+    public boolean recordResourceMiss(FakeNpcEntity npc, SurvivalPlanner.Resource resource) {
         long now = npc.level().getGameTime();
-        ResourceMiss previous = this.resourceMisses.get(need.resource());
-        int count = previous != null
-                && previous.dimension.equals(npc.level().dimension())
-                && previous.until > now ? previous.count + 1 : 1;
-        long until = now + (count >= 2 ? unavailableTicks(need.resource()) : 200L);
-        this.resourceMisses.put(need.resource(), new ResourceMiss(
-                npc.level().dimension(), Math.min(count, 2), until));
+        ResourceAvailability availability = normalizedAvailability(npc, resource, now);
+        if (availability != null && now - availability.lastFailureTick < 100L) return false;
+        int failures = Math.min(5, availability == null ? 1 : availability.failures + 1);
+        this.resourceAvailability.put(resource, new ResourceAvailability(
+                npc.level().dimension(), failures, now,
+                availability == null ? Long.MIN_VALUE / 2 : availability.lastEvidenceTick));
         return true;
     }
 
-    public void recordResourceFound(SurvivalPlanner.Resource resource) {
-        this.resourceMisses.remove(resource);
-    }
-
-    public @Nullable UnavailableResource unavailableResource(FakeNpcEntity npc) {
+    /** A reachable primary-search target cautiously restores one confidence step. */
+    public void recordResourceEvidence(FakeNpcEntity npc, SurvivalPlanner.Resource resource) {
         long now = npc.level().getGameTime();
-        UnavailableResource longest = null;
-        for (Map.Entry<SurvivalPlanner.Resource, ResourceMiss> entry : this.resourceMisses.entrySet()) {
-            ResourceMiss miss = entry.getValue();
-            if (!miss.dimension.equals(npc.level().dimension()) || miss.count < 2 || miss.until <= now) continue;
-            long ticks = miss.until - now;
-            if (longest == null || ticks > longest.ticksRemaining) {
-                longest = new UnavailableResource(entry.getKey(), ticks);
-            }
+        ResourceAvailability availability = normalizedAvailability(npc, resource, now);
+        if (availability == null || now - availability.lastEvidenceTick < 200L) return;
+        int failures = availability.failures - 1;
+        if (failures <= 0) {
+            this.resourceAvailability.remove(resource);
+        } else {
+            this.resourceAvailability.put(resource, new ResourceAvailability(
+                    availability.dimension, failures, availability.lastFailureTick, now));
         }
-        return longest;
     }
 
-    private static int unavailableTicks(SurvivalPlanner.Resource resource) {
-        return switch (resource) {
-            case DIAMOND -> 6000;
-            case IRON_ORE -> 2400;
-            case FUEL -> 1200;
-            case LOGS, COBBLESTONE, SOIL -> 600;
-            default -> 600;
+    /** Reaching and harvesting the block is strong evidence and clears all failures. */
+    public void recordResourceSuccess(FakeNpcEntity npc, SurvivalPlanner.Resource resource) {
+        ResourceAvailability availability = this.resourceAvailability.get(resource);
+        if (availability != null && availability.dimension.equals(npc.level().dimension())) {
+            this.resourceAvailability.remove(resource);
+        }
+    }
+
+    public AvailabilitySnapshot resourceAvailability(FakeNpcEntity npc, SurvivalPlanner.Resource resource) {
+        long now = npc.level().getGameTime();
+        ResourceAvailability availability = normalizedAvailability(npc, resource, now);
+        if (availability == null) return new AvailabilitySnapshot(1.0D, 0, 0L);
+        double confidence = switch (availability.failures) {
+            case 1 -> 0.72D;
+            case 2 -> 0.45D;
+            case 3 -> 0.24D;
+            case 4 -> 0.10D;
+            default -> 0.0D;
         };
+        long recoveryInterval = recoveryInterval(resource);
+        long ticksUntilRecovery = Math.max(1L,
+                recoveryInterval - (now - availability.lastFailureTick));
+        return new AvailabilitySnapshot(confidence, availability.failures, ticksUntilRecovery);
+    }
+
+    private @Nullable ResourceAvailability normalizedAvailability(FakeNpcEntity npc,
+                                                                  SurvivalPlanner.Resource resource, long now) {
+        ResourceAvailability availability = this.resourceAvailability.get(resource);
+        if (availability == null) return null;
+        if (!availability.dimension.equals(npc.level().dimension())) {
+            this.resourceAvailability.remove(resource);
+            return null;
+        }
+        long recoveryInterval = recoveryInterval(resource);
+        int recovered = (int)((now - availability.lastFailureTick) / recoveryInterval);
+        if (recovered <= 0) return availability;
+        int failures = Math.max(0, availability.failures - recovered);
+        if (failures == 0) {
+            this.resourceAvailability.remove(resource);
+            return null;
+        }
+        ResourceAvailability normalized = new ResourceAvailability(
+                availability.dimension, failures,
+                availability.lastFailureTick + recovered * recoveryInterval,
+                availability.lastEvidenceTick);
+        this.resourceAvailability.put(resource, normalized);
+        return normalized;
+    }
+
+    private static long recoveryInterval(SurvivalPlanner.Resource resource) {
+        return switch (resource) {
+            case LOGS, SOIL -> 600L;
+            case COBBLESTONE -> 900L;
+            case FUEL -> 1_200L;
+            case IRON_ORE -> 1_800L;
+            default -> 600L;
+        };
+    }
+
+    public void rememberResource(FakeNpcEntity npc, SurvivalPlanner.Resource resource, BlockPos pos) {
+        final int maximumEntriesPerResource = 128;
+        LinkedHashMap<RememberedBlock, Long> entries = this.knownResources.computeIfAbsent(
+                resource, ignored -> new LinkedHashMap<>());
+        RememberedBlock block = new RememberedBlock(npc.level().dimension(), pos.immutable());
+        if (!entries.containsKey(block) && entries.size() >= maximumEntriesPerResource) {
+            entries.keySet().removeIf(remembered -> !remembered.dimension().equals(npc.level().dimension()));
+        }
+        if (entries.containsKey(block) || entries.size() < maximumEntriesPerResource) {
+            entries.put(block, npc.level().getGameTime());
+        }
+    }
+
+    public List<RememberedBlock> knownResources(SurvivalPlanner.Resource resource) {
+        LinkedHashMap<RememberedBlock, Long> entries = this.knownResources.get(resource);
+        return entries == null ? List.of() : List.copyOf(entries.keySet());
+    }
+
+    public void forgetResource(SurvivalPlanner.Resource resource, ResourceKey<Level> dimension, BlockPos pos) {
+        LinkedHashMap<RememberedBlock, Long> entries = this.knownResources.get(resource);
+        if (entries != null) entries.remove(new RememberedBlock(dimension, pos.immutable()));
+    }
+
+    public void pruneKnownResources(FakeNpcEntity npc) {
+        final long staleAfterTicks = 12_000L;
+        long cutoff = npc.level().getGameTime() - staleAfterTicks;
+        this.knownResources.values().forEach(entries ->
+                entries.entrySet().removeIf(entry -> entry.getValue() < cutoff));
+    }
+
+    public int knownResourceCount() {
+        return this.knownResources.values().stream().mapToInt(Map::size).sum();
     }
 
     public record RememberedBlock(ResourceKey<Level> dimension, BlockPos pos) {
@@ -170,12 +256,14 @@ public final class NpcMemories {
     public record RememberedStation(ResourceKey<Level> dimension, BlockInteractionStations.Target target) {
     }
 
-    public record ResourceAdjustment(double score, double confidence) {
+    public record ResourceAdjustment(double score, double confidence, int failures, long ticksUntilRecovery) {
     }
 
-    public record UnavailableResource(SurvivalPlanner.Resource resource, long ticksRemaining) {
+    public record AvailabilitySnapshot(double confidence, int failures, long ticksUntilRecovery) {
     }
 
-    private record ResourceMiss(ResourceKey<Level> dimension, int count, long until) {
+    private record ResourceAvailability(ResourceKey<Level> dimension, int failures,
+                                        long lastFailureTick, long lastEvidenceTick) {
     }
+
 }

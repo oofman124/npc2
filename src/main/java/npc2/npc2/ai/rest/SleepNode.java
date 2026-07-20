@@ -31,7 +31,7 @@ public class SleepNode extends ExecutableNode {
                     brain.memories.floorSleepPosition = brain.npc.blockPosition().immutable();
                     brain.memories.floorSleeping = true;
                     brain.memories.seekingBed = false;
-                    brain.npc.startSleeping(brain.memories.floorSleepPosition);
+                    brain.npc.startSleepingOnFloor(brain.memories.floorSleepPosition);
                 }
                 this.outPort.fire(context);
                 return;

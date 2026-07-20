@@ -5,7 +5,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -31,7 +30,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
-import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.equipment.Equippable;
 import net.minecraft.world.food.FoodProperties;
 import net.minecraft.tags.ItemTags;
@@ -39,12 +38,17 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
 import org.jspecify.annotations.Nullable;
 import npc2.npc2.ai.movement.LootReservations;
 import npc2.npc2.ai.movement.ChestLooting;
@@ -71,6 +75,8 @@ public interface NpcController {
         BedReservations.release(npc);
         BlockResourceGathering.release(npc);
         BlockInteractionStations.releaseAll(npc);
+        npc.getMemories().stationPlacementSites.clear();
+        npc.getMemories().stationRelocationTargets.clear();
     }
 
     /** Called every server tick this NPC is active. This is your behavior tree's root tick. */
@@ -295,7 +301,7 @@ public interface NpcController {
             return false;
         }
         if (candidate instanceof Player player) {
-            //return !player.isCreative() && !player.isSpectator();
+            return !player.isCreative() && !player.isSpectator();
         }
         if (candidate instanceof Animal) {
             return false;
@@ -396,19 +402,52 @@ public interface NpcController {
      */
     default boolean placeBlock(FakeNpcEntity npc, BlockHitResult hit) {
         ItemStack stack = npc.getMainHandItem();
-        if (stack.isEmpty()) {
-            return false;
-        }
+        if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem blockItem)) return false;
 
-        UseOnContext context = new UseOnContext(
-                npc.level(),
-                null,
-                InteractionHand.MAIN_HAND,
-                stack,
-                hit
-        );
-        InteractionResult result = stack.useOn(context);
-        if (result.consumesAction()) {
+        BlockPos clicked = hit.getBlockPos();
+        BlockPos placeAt = npc.level().getBlockState(clicked).canBeReplaced()
+                ? clicked : clicked.relative(hit.getDirection());
+        if (!npc.level().getBlockState(placeAt).canBeReplaced()) return false;
+
+        Block block = blockItem.getBlock();
+        if (block instanceof BedBlock bed) return placeBedBlock(npc, stack, bed, placeAt);
+
+        BlockState state = block.defaultBlockState();
+        if (state.hasProperty(HorizontalDirectionalBlock.FACING)) {
+            state = state.setValue(HorizontalDirectionalBlock.FACING, npc.getDirection().getOpposite());
+        }
+        if (!state.canSurvive(npc.level(), placeAt)
+                || !npc.level().isUnobstructed(state, placeAt, CollisionContext.of(npc))
+                || !npc.level().setBlock(placeAt, state, Block.UPDATE_ALL)) return false;
+        block.setPlacedBy(npc.level(), placeAt, state, npc, stack);
+        stack.shrink(1);
+        swingHand(npc);
+        return true;
+    }
+
+    private boolean placeBedBlock(FakeNpcEntity npc, ItemStack stack, BedBlock bed, BlockPos foot) {
+        Direction preferred = npc.getDirection();
+        Direction[] directions = {
+                preferred, preferred.getClockWise(), preferred.getCounterClockWise(), preferred.getOpposite()
+        };
+        for (Direction direction : directions) {
+            BlockPos head = foot.relative(direction);
+            if (!npc.level().getBlockState(head).canBeReplaced()) continue;
+            BlockState footState = bed.defaultBlockState()
+                    .setValue(HorizontalDirectionalBlock.FACING, direction)
+                    .setValue(BedBlock.PART, BedPart.FOOT);
+            BlockState headState = footState.setValue(BedBlock.PART, BedPart.HEAD);
+            if (!footState.canSurvive(npc.level(), foot)
+                    || !headState.canSurvive(npc.level(), head)
+                    || !npc.level().isUnobstructed(footState, foot, CollisionContext.of(npc))
+                    || !npc.level().isUnobstructed(headState, head, CollisionContext.of(npc))) continue;
+            if (!npc.level().setBlock(foot, footState, Block.UPDATE_ALL)) continue;
+            bed.setPlacedBy(npc.level(), foot, footState, npc, stack);
+            if (!(npc.level().getBlockState(head).getBlock() instanceof BedBlock)) {
+                npc.level().setBlock(foot, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+                continue;
+            }
+            stack.shrink(1);
             swingHand(npc);
             return true;
         }
@@ -809,8 +848,10 @@ public interface NpcController {
             return 12.0D + food.nutrition() + food.saturation();
         }
         SimpleContainer bag = npc.getInventory();
-        if (stack.is(ItemTags.LOGS) && countInventoryTag(bag, ItemTags.LOGS) < SurvivalNeeds.LOG_TARGET) {
-            return 4.0D;
+        SurvivalPlanner.Plan plan = SurvivalNeeds.planFor(npc, this);
+        double plannedResourceScore = getPlannedResourceLootScore(stack, plan);
+        if (plannedResourceScore > 0.0D) {
+            return plannedResourceScore;
         }
         if (stack.is(ItemTags.PLANKS) && countInventoryTag(bag, ItemTags.PLANKS) < 16) {
             return 3.5D;
@@ -818,35 +859,9 @@ public interface NpcController {
         if (stack.is(Items.STICK) && bag.countItem(Items.STICK) < 8) {
             return 3.0D;
         }
-        if (stack.is(Items.TORCH) && bag.countItem(Items.TORCH) < SurvivalNeeds.TORCH_TARGET) {
-            return 3.0D;
-        }
         if (stack.is(Items.WHEAT) && countFood(npc) < SurvivalNeeds.FOOD_TARGET
                 && bag.countItem(Items.WHEAT) < 12) {
             return 2.5D;
-        }
-        if ((stack.is(Items.COAL) || stack.is(Items.CHARCOAL))
-                && SurvivalNeeds.countFuel(bag) < SurvivalNeeds.FUEL_TARGET) {
-            return 2.5D;
-        }
-        if (stack.is(Items.COBBLESTONE) && bag.countItem(Items.COBBLESTONE) < SurvivalNeeds.COBBLESTONE_TARGET) {
-            return 2.5D;
-        }
-        if (stack.is(Items.DIRT) && bag.countItem(Items.DIRT) < SurvivalNeeds.SOIL_TARGET) {
-            return 2.0D;
-        }
-        if (stack.is(Items.NETHERRACK) && bag.countItem(Items.NETHERRACK) < SurvivalNeeds.SOIL_TARGET) {
-            return 2.0D;
-        }
-        if (stack.is(Items.IRON_INGOT) && bag.countItem(Items.IRON_INGOT) < 16) {
-            return 4.5D;
-        }
-        SurvivalPlanner.Plan plan = SurvivalNeeds.planFor(npc, this);
-        if (stack.is(Items.RAW_IRON) && plan.score(SurvivalPlanner.Resource.IRON_ORE) > 0.0D) {
-            return 6.0D + plan.score(SurvivalPlanner.Resource.IRON_ORE) * 0.1D;
-        }
-        if (stack.is(Items.DIAMOND) && plan.score(SurvivalPlanner.Resource.DIAMOND) > 0.0D) {
-            return 12.0D + plan.score(SurvivalPlanner.Resource.DIAMOND) * 0.1D;
         }
 
         if (isWeapon(stack)) {
@@ -891,6 +906,45 @@ public interface NpcController {
         }
         double candidateScore = getArmorScore(stack);
         return candidateScore > bestOwnedScore ? 5.0D + candidateScore : 0.0D;
+    }
+
+    /** Scores direct resource drops from every unmet entry in the weighted plan, not only its top need. */
+    default double getPlannedResourceLootScore(ItemStack stack, SurvivalPlanner.Plan plan) {
+        SurvivalPlanner.Resource resource = getPlannedResourceForLoot(stack);
+        if (resource == null) return 0.0D;
+        double baseScore = switch (resource) {
+            case LOGS -> 4.0D;
+            case COBBLESTONE, FUEL -> 2.5D;
+            case SOIL -> 2.0D;
+            case IRON_ORE -> 6.0D;
+            case TORCHES -> 3.0D;
+            default -> 0.0D;
+        };
+        if (baseScore <= 0.0D) return 0.0D;
+
+        SurvivalPlanner.Need need = plan.needs().get(resource);
+        if (need == null || need.current() >= need.target()) return 0.0D;
+        // Keep the base score when a block search temporarily reduced confidence;
+        // seeing the dropped item is direct evidence that the resource is available.
+        return baseScore + Math.max(0.0D, need.score()) * 0.1D;
+    }
+
+    /** Maps tangible drops back to the same resource keys used by planning and gathering. */
+    default SurvivalPlanner.@Nullable Resource getPlannedResourceForLoot(ItemStack stack) {
+        if (stack.is(ItemTags.LOGS)) {
+            return SurvivalPlanner.Resource.LOGS;
+        } else if (stack.is(Items.COBBLESTONE)) {
+            return SurvivalPlanner.Resource.COBBLESTONE;
+        } else if (stack.is(Items.DIRT) || stack.is(Items.NETHERRACK)) {
+            return SurvivalPlanner.Resource.SOIL;
+        } else if (stack.is(Items.COAL) || stack.is(Items.CHARCOAL)) {
+            return SurvivalPlanner.Resource.FUEL;
+        } else if (stack.is(Items.RAW_IRON) || stack.is(Items.IRON_INGOT)) {
+            return SurvivalPlanner.Resource.IRON_ORE;
+        } else if (stack.is(Items.TORCH)) {
+            return SurvivalPlanner.Resource.TORCHES;
+        }
+        return null;
     }
 
     default int countInventoryTag(SimpleContainer inventory, net.minecraft.tags.TagKey<net.minecraft.world.item.Item> tag) {

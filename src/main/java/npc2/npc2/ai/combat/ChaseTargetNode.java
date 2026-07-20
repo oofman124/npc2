@@ -40,7 +40,7 @@ public class ChaseTargetNode extends ExecutableNode {
             boolean targetInRange = distanceSqr <= 4.0D;
             context.set(NpcContext.TARGET_IN_RANGE, targetInRange);
 
-            if (brain.memories.blockingMob || brain.memories.retreating || brain.memories.seekingLoot || brain.memories.seekingChest || brain.memories.seekingBed
+            if (brain.memories.blockingMob || brain.memories.retreating || brain.memories.floating || brain.memories.seekingLoot || brain.memories.seekingChest || brain.memories.seekingBed
                     || brain.memories.depositing || brain.memories.gatheringResource || brain.memories.seekingCraftingTable
                     || brain.memories.processingFurnace || npc.isSleeping()) {
                 this.outPort.fire(context);

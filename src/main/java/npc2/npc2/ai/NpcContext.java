@@ -15,10 +15,13 @@ public final class NpcContext {
 
     /** Refreshed in the graph context immediately before each Tick event. */
     public static final String PLAN = "Plan";
+    public static final String EQUIPMENT_UPDATE = "EquipmentUpdate";
+    public static final String DEFENSE_SCAN = "DefenseScan";
 
     /** Values generated inside one event execution and cleared by its next reset. */
     public static final String TARGET = "Target";
     public static final String TARGET_IN_RANGE = "TargetInRange";
+    public static final String DEFENSE_THREAT = "DefenseThreat";
 
     private NpcContext() {
     }
@@ -33,7 +36,12 @@ public final class NpcContext {
         );
     }
 
-    public static Map<String, Object> tick(SurvivalPlanner.Plan plan) {
-        return Map.of(PLAN, plan);
+    public static Map<String, Object> tick(SurvivalPlanner.Plan plan, boolean equipmentUpdate,
+                                           boolean defenseScan) {
+        return Map.of(
+                PLAN, plan,
+                EQUIPMENT_UPDATE, equipmentUpdate,
+                DEFENSE_SCAN, defenseScan
+        );
     }
 }

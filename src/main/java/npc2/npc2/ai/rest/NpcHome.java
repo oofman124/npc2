@@ -7,11 +7,6 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.ai.NpcBrain;
-import npc2.npc2.ai.crafting.CraftingStations;
-import npc2.npc2.ai.interaction.BlockInteractionStations;
-import npc2.npc2.ai.movement.BlockResourceGathering;
-import npc2.npc2.ai.movement.ChestLooting;
-import npc2.npc2.ai.movement.LootReservations;
 import npc2.npc2.ai.survival.SurvivalNeeds;
 import org.jspecify.annotations.Nullable;
 
@@ -63,36 +58,33 @@ public final class NpcHome {
         boolean wasReturningHome = brain.memories.returningHome;
         brain.memories.returningHome = shouldPrioritize(brain);
         if (!brain.memories.returningHome) return;
-        if (!wasReturningHome) brain.memories.bedSearchCooldown = 0;
+        if (!wasReturningHome) {
+            brain.memories.bedSearchCooldown = Math.floorMod(brain.npc.getId() + 1, 3);
+        }
+        boolean cancelMovement = !wasReturningHome || hasConflictingWork(brain);
         if (brain.memories.bedTarget != null
                 && !isHome(brain.npc, brain.memories.bedTarget.bedPos())) {
             BedReservations.release(brain.npc);
             brain.memories.bedTarget = null;
             brain.memories.seekingBed = false;
+            cancelMovement = true;
         }
+        if (!cancelMovement) return;
 
-        // Returning home preempts ordinary work, but shared ownership tables remain
-        // responsible for coordinating other NPCs that are still using those targets.
-        LootReservations.release(brain.npc);
-        ChestLooting.release(brain.npc);
-        BlockResourceGathering.release(brain.npc);
-        CraftingStations.release(brain.npc);
-        BlockInteractionStations.release(brain.npc, BlockInteractionStations.Kind.FURNACE);
-        brain.memories.seekingLoot = false;
-        brain.memories.lootTarget = null;
-        brain.memories.seekingChest = false;
-        brain.memories.chestTarget = null;
-        brain.memories.chestLootTarget = null;
-        brain.memories.depositing = false;
-        brain.memories.chestDepositTarget = null;
-        brain.memories.gatheringResource = false;
-        brain.memories.resourceTarget = null;
-        brain.memories.seekingCraftingTable = false;
-        brain.memories.craftingTableTarget = null;
-        brain.memories.processingFurnace = false;
-        brain.memories.furnaceTarget = null;
-        brain.memories.wanderTarget = null;
-        brain.controller.stopMoving(brain.npc);
+        brain.cancelOrdinaryWork();
+    }
+
+    private static boolean hasConflictingWork(NpcBrain brain) {
+        return brain.memories.seekingLoot || brain.memories.lootTarget != null
+                || brain.memories.seekingChest || brain.memories.chestLootTarget != null
+                || brain.memories.depositing || brain.memories.chestDepositTarget != null
+                || brain.memories.gatheringResource || brain.memories.resourceTarget != null
+                || brain.memories.resourceSearch != null
+                || brain.memories.seekingCraftingTable || brain.memories.craftingTableTarget != null
+                || brain.memories.processingFurnace || brain.memories.furnaceTarget != null
+                || !brain.memories.stationPlacementSites.isEmpty()
+                || !brain.memories.stationRelocationTargets.isEmpty()
+                || brain.memories.wanderTarget != null;
     }
 
     public static void defer(FakeNpcEntity npc) {

@@ -2,6 +2,7 @@ package npc2.npc2.ai.condition;
 
 import io.github.oofman124.asterisk.nodes.ConditionNode;
 import npc2.npc2.ai.NpcBrain;
+import npc2.npc2.ai.NpcTickSchedule;
 import npc2.npc2.ai.movement.ChestLooting;
 import org.jspecify.annotations.NullMarked;
 
@@ -23,15 +24,24 @@ public class CanDepositItemsNode extends ConditionNode {
                 && !this.brain.memories.seekingBed && !this.brain.memories.seekingCraftingTable && !this.brain.memories.gatheringResource
                 && !this.brain.memories.processingFurnace
                 && !this.brain.npc.isSleeping();
-        if (!safe || !ChestLooting.hasItemsToDeposit(this.brain.npc, this.brain.controller)) {
-            if (!this.brain.memories.seekingChest) ChestLooting.release(this.brain.npc);
-            this.brain.memories.chestDepositTarget = null;
-            this.brain.memories.depositing = false;
+        if (!safe) {
+            clearDepositIntent();
             return false;
         }
         if (this.brain.memories.depositing) return true;
-        if (++this.brain.memories.depositCheckTicks < CHECK_INTERVAL) return false;
-        this.brain.memories.depositCheckTicks = 0;
+        if (!NpcTickSchedule.due(this.brain.npc, CHECK_INTERVAL, 39)) return false;
+        if (!ChestLooting.hasItemsToDeposit(this.brain.npc, this.brain.controller)) {
+            clearDepositIntent();
+            return false;
+        }
         return true;
+    }
+
+    private void clearDepositIntent() {
+        if (!this.brain.memories.depositing
+                && this.brain.memories.chestDepositTarget == null) return;
+        if (!this.brain.memories.seekingChest) ChestLooting.release(this.brain.npc);
+        this.brain.memories.chestDepositTarget = null;
+        this.brain.memories.depositing = false;
     }
 }

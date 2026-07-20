@@ -9,6 +9,7 @@ import net.minecraft.world.entity.monster.Creeper;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.NpcController;
 import npc2.npc2.ai.NpcBrain;
+import npc2.npc2.ai.NpcContext;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
@@ -34,10 +35,11 @@ public class BlockMobNode extends ExecutableNode {
         if (context.get("Brain") instanceof NpcBrain brain
                 && context.get("Npc") instanceof FakeNpcEntity npc
                 && context.get("Controller") instanceof NpcController controller) {
-            LivingEntity threat = findCreeperThreat(brain, npc, controller);
-            if (threat == null) {
-                threat = findRangedThreat(brain, npc, controller);
+            LivingEntity threat = findTrackedThreat(brain, npc, controller);
+            if (threat == null && Boolean.TRUE.equals(context.get(NpcContext.DEFENSE_SCAN))) {
+                threat = findNearbyThreat(npc, controller);
             }
+            if (threat != null) context.set(NpcContext.DEFENSE_THREAT, threat);
 
             if (threat != null && controller.hasShieldEquipped(npc)) {
                 brain.memories.blockingMob = true;
@@ -67,17 +69,20 @@ public class BlockMobNode extends ExecutableNode {
         this.outPort.fire(context);
     }
 
-    private static LivingEntity findCreeperThreat(NpcBrain brain, FakeNpcEntity npc, NpcController controller) {
+    private static LivingEntity findTrackedThreat(NpcBrain brain, FakeNpcEntity npc,
+                                                   NpcController controller) {
         if (brain.memories.target instanceof Creeper creeper && controller.shouldBlockCreeper(npc, creeper)) {
             return creeper;
         }
-        return controller.findThreateningCreeper(npc, 8.0D);
-    }
-
-    private static LivingEntity findRangedThreat(NpcBrain brain, FakeNpcEntity npc, NpcController controller) {
         if (brain.memories.target != null && controller.shouldBlockRangedAttack(npc, brain.memories.target)) {
             return brain.memories.target;
         }
+        return null;
+    }
+
+    private static LivingEntity findNearbyThreat(FakeNpcEntity npc, NpcController controller) {
+        LivingEntity threat = controller.findThreateningCreeper(npc, 8.0D);
+        if (threat != null) return threat;
         double radius = npc.isSleeping() ? RANGED_THREAT_RADIUS * 0.25D : RANGED_THREAT_RADIUS;
         return controller.findThreateningRangedAttacker(npc, radius);
     }

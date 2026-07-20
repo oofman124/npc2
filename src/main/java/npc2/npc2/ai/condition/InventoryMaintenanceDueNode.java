@@ -2,6 +2,7 @@ package npc2.npc2.ai.condition;
 
 import io.github.oofman124.asterisk.nodes.ConditionNode;
 import npc2.npc2.ai.NpcBrain;
+import npc2.npc2.ai.NpcTickSchedule;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
@@ -17,10 +18,7 @@ public class InventoryMaintenanceDueNode extends ConditionNode {
 
     @Override
     protected boolean evaluateCondition() {
-        if (++this.brain.memories.inventoryMaintenanceTicks < this.interval) {
-            return false;
-        }
-        this.brain.memories.inventoryMaintenanceTicks = 0;
-        return !this.brain.npc.isSleeping() && !this.brain.memories.blockingMob;
+        return NpcTickSchedule.due(this.brain.npc, this.interval, 73)
+                && !this.brain.npc.isSleeping() && !this.brain.memories.blockingMob;
     }
 }

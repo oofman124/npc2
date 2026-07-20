@@ -37,7 +37,6 @@ public final class SurvivalPlanner {
         int fuel = SurvivalNeeds.countFuel(bag);
         int rawIron = bag.countItem(Items.RAW_IRON);
         int iron = bag.countItem(Items.IRON_INGOT);
-        int diamonds = bag.countItem(Items.DIAMOND);
         int wool = controller.countInventoryTag(bag, ItemTags.WOOL);
         int torches = bag.countItem(Items.TORCH);
 
@@ -48,7 +47,6 @@ public final class SurvivalPlanner {
         add(needs, Resource.SOIL, soil, SurvivalNeeds.SOIL_TARGET, 22.0D, "terrain assistance blocks");
         add(needs, Resource.FUEL, fuel, SurvivalNeeds.FUEL_TARGET, 32.0D, "fuel and torches");
         add(needs, Resource.IRON_ORE, iron + rawIron, SurvivalNeeds.IRON_TARGET, 34.0D, "iron stockpile");
-        add(needs, Resource.DIAMOND, diamonds, SurvivalNeeds.DIAMOND_TARGET, 18.0D, "late-game tool stockpile");
         add(needs, Resource.TORCHES, torches, SurvivalNeeds.TORCH_TARGET,
                 npc.level().isBrightOutside() ? 18.0D : 42.0D, "portable light");
         if (torches < SurvivalNeeds.TORCH_TARGET) {
@@ -72,9 +70,6 @@ public final class SurvivalPlanner {
         } else if (pickaxeTier == ToolProgression.STONE) {
             require(needs, Resource.IRON_ORE, iron + rawIron, 3, 88.0D,
                     "iron pickaxe upgrade");
-        } else if (pickaxeTier == ToolProgression.IRON) {
-            require(needs, Resource.DIAMOND, diamonds, 3, 82.0D,
-                    "diamond pickaxe upgrade");
         }
 
         // Project the support chain needed to turn raw ore into an iron tool.
@@ -109,12 +104,14 @@ public final class SurvivalPlanner {
             NpcMemories.ResourceAdjustment adjustment = npc.getMemories().adjustResourceScore(
                     npc, resource, raw.score);
             String reason = raw.reason;
-            if (adjustment.confidence() == 0.0D) {
-                reason += " (not found nearby; retry later)";
+            if (adjustment.confidence() <= 0.0D) {
+                reason += " (not found; temporarily using other needs)";
             } else if (adjustment.confidence() < 1.0D) {
-                reason += " (low local search confidence)";
+                reason += String.format(java.util.Locale.ROOT, " (local availability %.0f%%)",
+                        adjustment.confidence() * 100.0D);
             }
-            snapshot.put(resource, new Need(resource, raw.current, raw.target, adjustment.score(), reason));
+            snapshot.put(resource, new Need(resource, raw.current, raw.target,
+                    adjustment.score(), reason));
         });
         return new Plan(Map.copyOf(snapshot), action, actionScore);
     }
@@ -157,7 +154,6 @@ public final class SurvivalPlanner {
         SOIL(true),
         FUEL(true),
         IRON_ORE(true),
-        DIAMOND(true),
         TORCHES(false),
         WOOL(false);
 

@@ -36,12 +36,13 @@ public final class NpcDebugHud {
     private static long lastRequestNanos;
     private static long lastSnapshotNanos;
     private static int highlightedEntityId = -1;
+    private static KeyMapping pinKey;
 
     private NpcDebugHud() {
     }
 
     public static void registerControls() {
-        KeyMapping pinKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+        pinKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.npc2.pin_debug", InputConstants.Type.KEYSYM, InputConstants.KEY_X, KeyMapping.Category.DEBUG));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (pinKey.consumeClick()) {
@@ -116,7 +117,7 @@ public final class NpcDebugHud {
         int y = 4;
         int aiCount = Math.min(7, data.aiLines().size());
         int movementCount = Math.min(6, data.movementLines().size());
-        int columnsY = y + 59;
+        int columnsY = y + 64;
         int leftBottom = columnsY + 10 + aiCount * 9 + 4 + 10 + movementCount * 9;
         int needCount = Math.min(4, data.needs().size());
         int rightBottom = columnsY + 10 + Math.max(9, needCount * 26) + 4 + 32;
@@ -131,8 +132,9 @@ public final class NpcDebugHud {
         text(graphics, font, (pinned ? "[PINNED] " : "") + data.name() + "  #" + data.entityId(),
                 x + 7, y + 6, pinned ? 0xFFFFD45A : 0xFFFFFFFF);
         drawHealth(graphics, font, data, x + 7, y + 19);
+        textClipped(graphics, font, pinHint(pinned), x + 7, y + 30, 0xFF93A0AE, INNER_WIDTH);
 
-        int statusY = y + 36;
+        int statusY = y + 41;
         textClipped(graphics, font, "Status", x + 7, statusY + 5, 0xFF79B8F3, 40);
         drawSlots(graphics, font, data.statusIcons(), x + 50, statusY, 10);
 
@@ -161,6 +163,11 @@ public final class NpcDebugHud {
 
         textClipped(graphics, font, "Inventory", x + 7, inventoryY, 0xFF79B8F3, INNER_WIDTH);
         drawSlots(graphics, font, data.inventory(), x + 7, inventoryY + 10, inventoryColumns);
+    }
+
+    private static String pinHint(boolean pinned) {
+        if (pinKey == null || pinKey.isUnbound()) return "Pin debug HUD: unbound";
+        return pinKey.getTranslatedKeyMessage().getString() + (pinned ? ": Unpin debug HUD" : ": Pin debug HUD");
     }
 
     private static void drawHealth(GuiGraphicsExtractor graphics, Font font, NpcDebugSnapshotPayload data, int x, int y) {

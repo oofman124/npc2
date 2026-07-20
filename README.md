@@ -16,7 +16,7 @@ to alter the environment by mining and placing blocks.
 > [!IMPORTANT]
 >Read the requirements and gameplay notes before adding npc2 to a world.
 >
->**You need the Fabric API in the `mods` folder.**
+>**You need Fabric API and Fabric Language Kotlin in the `mods` folder.**
 
 > [!NOTE]
 >The debug overlay will look less crooked at a GUI scale of 3 or less. The bug will be fixed soon.
@@ -49,15 +49,17 @@ to alter the environment by mining and placing blocks.
 - Fabric Loader 0.19.3 or newer
 - Fabric API compatible with Minecraft 26.2 (the project currently uses
   `0.154.2+26.2`)
+- Fabric Language Kotlin `1.13.13+kotlin.2.4.10` or newer
 - npc2 on both the server and every joining client
-
+note:
 There is currently no configuration screen or config file.
 
 ## Installation
 
 1. Install Fabric Loader for Minecraft 26.2.
-2. Put Fabric API and the npc2 jar in the instance's `mods` directory.
-3. In multiplayer, install both jars on the dedicated server and on each client.
+2. Put Fabric API, Fabric Language Kotlin, and the npc2 jar in the instance's `mods`
+   directory.
+3. In multiplayer, install all three jars on the dedicated server and on each client.
 4. Start the game and confirm that an `npc2` tab appears in the creative inventory.
 
 When building from source, use the normal jar in `build/libs`, not the `-sources` jar.
@@ -210,6 +212,7 @@ idle phases.
 
 | Symptom | What it usually means | What to do |
 | --- | --- | --- |
+| The game reports missing Kotlin classes or refuses to load npc2 | Fabric Language Kotlin is missing or older than npc2's required runtime | Install Fabric Language Kotlin `1.13.13+kotlin.2.4.10` or newer on the client and server |
 | The HUD does not appear | No living, client-tracked NPC is inside the selection cone, a block obstructs sight, or a menu is open | Close menus, move into the NPC's tracked area, and aim near its body with clear line of sight |
 | `X` does nothing | The cursor is not currently selecting an NPC or another key binding conflicts | Confirm the HUD is visible, then check Controls > Debug and rebind `Pin NPC Debug Panel` |
 | A pinned NPC died and another HUD will not open | This was caused by a stale pinned entity ID in older builds | Update to the current build; dead, removed, unloaded, and disconnected targets now clear automatically |

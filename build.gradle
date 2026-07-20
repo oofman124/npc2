@@ -39,6 +39,7 @@ dependencies {
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	implementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
 
 	implementation project(':asterisk')
 	include project(':asterisk')
@@ -47,10 +48,12 @@ dependencies {
 
 processResources {
 	def version = project.version
+	def fabricKotlinVersion = project.fabric_kotlin_version
 	inputs.property "version", version
+	inputs.property "fabricKotlinVersion", fabricKotlinVersion
 
 	filesMatching("fabric.mod.json") {
-		expand "version": version
+		expand "version": version, "fabricKotlinVersion": fabricKotlinVersion
 	}
 }
 

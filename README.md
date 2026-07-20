@@ -1,12 +1,46 @@
-# NPC2
+# npc2
 
-NPC2 is an experimental Fabric mod for Minecraft 26.2 that adds autonomous survival
+![GitHub Release](https://img.shields.io/github/v/release/oofman124/npc2)
+![GitHub last commit](https://img.shields.io/github/last-commit/oofman124/npc2)
+![Minecraft Version](https://img.shields.io/badge/minecraft-26.2-blue)
+![Fabric](https://img.shields.io/badge/fabric-blue)
+
+npc2 is an experimental Fabric mod for Minecraft 26.2 that adds autonomous survival
 NPCs. Each NPC has a weighted survival plan, persistent memories, vanilla mob physics,
 and a node-based behavior graph for gathering, crafting, combat, storage, movement, and
 sleep.
 
 This is an active development build. Back up worlds before testing it, and expect NPCs
 to alter the environment by mining and placing blocks.
+
+> [!IMPORTANT]
+>Read the requirements and gameplay notes before adding npc2 to a world.
+>
+>**You need the Fabric API in the `mods` folder.**
+
+> [!NOTE]
+>The debug overlay will look less crooked at a GUI scale of 3 or less. The bug will be fixed soon.
+>
+>NPCs are horribly slow when floating in the water. This bug will be fixed soon.
+>
+>npc2's tab may not be visible from the inventory in Creative mode without using the arrow buttons.
+
+## Table of contents
+
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Spawning an NPC](#spawning-an-npc)
+- [How the NPC works](#how-the-npc-works)
+  - [Finding and gathering resources](#finding-and-gathering-resources)
+  - [Crafting, furnaces, and placement](#crafting-furnaces-and-placement)
+  - [Loot and storage](#loot-and-storage)
+  - [Combat and survival](#combat-and-survival)
+  - [Beds, home, and floor sleep](#beds-home-and-floor-sleep)
+- [Debug HUD](#debug-hud)
+- [Common problems](#common-problems)
+- [Building and development](#building-and-development)
+  - [Build troubleshooting](#build-troubleshooting)
+- [License](#license)
 
 ## Requirements
 
@@ -15,22 +49,22 @@ to alter the environment by mining and placing blocks.
 - Fabric Loader 0.19.3 or newer
 - Fabric API compatible with Minecraft 26.2 (the project currently uses
   `0.154.2+26.2`)
-- NPC2 on both the server and every joining client
+- npc2 on both the server and every joining client
 
 There is currently no configuration screen or config file.
 
 ## Installation
 
 1. Install Fabric Loader for Minecraft 26.2.
-2. Put Fabric API and the NPC2 jar in the instance's `mods` directory.
+2. Put Fabric API and the npc2 jar in the instance's `mods` directory.
 3. In multiplayer, install both jars on the dedicated server and on each client.
-4. Start the game and confirm that an `NPC2` tab appears in the creative inventory.
+4. Start the game and confirm that an `npc2` tab appears in the creative inventory.
 
 When building from source, use the normal jar in `build/libs`, not the `-sources` jar.
 
 ## Spawning an NPC
 
-The Survivor NPC Spawn Egg is in its own `NPC2` creative inventory tab. It can also be
+The Survivor NPC Spawn Egg is in its own `npc2` creative inventory tab. It can also be
 given with:
 
 ```mcfunction
@@ -179,7 +213,7 @@ idle phases.
 | The HUD does not appear | No living, client-tracked NPC is inside the selection cone, a block obstructs sight, or a menu is open | Close menus, move into the NPC's tracked area, and aim near its body with clear line of sight |
 | `X` does nothing | The cursor is not currently selecting an NPC or another key binding conflicts | Confirm the HUD is visible, then check Controls > Debug and rebind `Pin NPC Debug Panel` |
 | A pinned NPC died and another HUD will not open | This was caused by a stale pinned entity ID in older builds | Update to the current build; dead, removed, unloaded, and disconnected targets now clear automatically |
-| The panel appears and then vanishes | The server stopped returning snapshots, commonly because the entity died/unloaded or client and server mod versions differ | Keep the NPC loaded and install the same NPC2/Fabric versions on both sides |
+| The panel appears and then vanishes | The server stopped returning snapshots, commonly because the entity died/unloaded or client and server mod versions differ | Keep the NPC loaded and install the same npc2/Fabric versions on both sides |
 | The NPC attacks the observer | Alive, attackable survival and adventure players are intentional combat targets; there is no owner/team exception yet | Observe in creative or spectator mode |
 | `searching resources` shows no movement | The primary block scan is running and deliberately owns no path | Wait for the staged scan to finish; use the path and search-radius lines to confirm progress |
 | The NPC repeatedly explores without finding anything | Candidate blocks are absent, unloaded, sealed away from outside air, reserved, or unreachable | Keep surrounding chunks loaded, expose a route to resources, move the NPC to a richer surface area, or provide supplies as drops/chest loot |
@@ -194,7 +228,7 @@ idle phases.
 | Performance drops with many NPCs | Each NPC performs sensing, planning, pathfinding, and a budgeted background survey | Reduce the NPC count and loaded area; use the HUD to identify repeated failed paths or searches |
 
 When reporting an AI freeze, pin the NPC and capture the full `Decision`, `Movement / path`,
-resource needs, and path trace. Include the game log, Minecraft/Fabric/NPC2 versions,
+resource needs, and path trace. Include the game log, Minecraft/Fabric/npc2 versions,
 dimension, nearby terrain, and whether the behavior recovers after roughly ten seconds.
 
 ## Building and development

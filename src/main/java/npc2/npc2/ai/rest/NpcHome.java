@@ -33,7 +33,7 @@ public final class NpcHome {
         BlockPos home = npc.getMemories().homeBedPosition;
         if (home == null || npc.getMemories().homeDimension == null) return false;
         if (!npc.getMemories().homeDimension.equals(npc.level().dimension())) return false;
-        if (!npc.level().hasChunkAt(home)) return false;
+        if (!npc.level().hasChunk(home.getX() >> 4, home.getZ() >> 4)) return false;
         if (!(npc.level().getBlockState(home).getBlock() instanceof BedBlock)) {
             clear(npc);
             return false;

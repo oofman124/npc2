@@ -1,12 +1,18 @@
 package npc2.npc2.ai;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.Vec3;
 import npc2.npc2.FakeNpcEntity;
+import npc2.npc2.Npc2Config;
 import npc2.npc2.ai.crafting.CraftingStations;
 import npc2.npc2.ai.interaction.BlockInteractionStations;
 import npc2.npc2.ai.interaction.CarriedStationPlacement;
@@ -44,6 +50,7 @@ public final class NpcMemories {
     public int guardTicksRemaining;
     public int attackDebounceTicks;
     public int creeperCoverCooldown;
+    public final Map<UUID, Long> provokedPlayersUntil = new HashMap<>();
 
     // General movement.
     public @Nullable Vec3 wanderTarget;
@@ -119,6 +126,151 @@ public final class NpcMemories {
             new EnumMap<>(SurvivalPlanner.Resource.class);
     private final EnumMap<SurvivalPlanner.Resource, ResourceAvailability> resourceAvailability =
             new EnumMap<>(SurvivalPlanner.Resource.class);
+
+    public void provoke(FakeNpcEntity npc, Player player) {
+        int duration = Npc2Config.get().playerRetaliationTicks;
+        if (duration <= 0) return;
+        this.provokedPlayersUntil.put(player.getUUID(), npc.level().getGameTime() + duration);
+    }
+
+    public boolean isProvokedBy(FakeNpcEntity npc, Player player) {
+        if (Npc2Config.get().playerRetaliationTicks <= 0) {
+            this.provokedPlayersUntil.clear();
+            return false;
+        }
+        long now = npc.level().getGameTime();
+        this.provokedPlayersUntil.entrySet().removeIf(entry -> entry.getValue() <= now);
+        return this.provokedPlayersUntil.getOrDefault(player.getUUID(), Long.MIN_VALUE) > now;
+    }
+
+    /** Save only durable knowledge; active paths and tasks are safely reacquired after loading. */
+    public void save(ValueOutput output) {
+        if (this.homeDimension != null && this.homeBedPosition != null) {
+            ValueOutput home = output.child("home");
+            writeDimension(home, this.homeDimension);
+            writePos(home, this.homeBedPosition);
+        }
+
+        ValueOutput.ValueOutputList resources = output.childrenList("known_resources");
+        this.knownResources.forEach((resource, entries) -> entries.forEach((block, seenTick) -> {
+            ValueOutput entry = resources.addChild();
+            entry.putString("resource", resource.name());
+            writeDimension(entry, block.dimension());
+            writePos(entry, block.pos());
+            entry.putLong("seen_tick", seenTick);
+        }));
+
+        ValueOutput.ValueOutputList availability = output.childrenList("resource_availability");
+        this.resourceAvailability.forEach((resource, value) -> {
+            ValueOutput entry = availability.addChild();
+            entry.putString("resource", resource.name());
+            writeDimension(entry, value.dimension());
+            entry.putInt("failures", value.failures());
+            entry.putLong("last_failure_tick", value.lastFailureTick());
+            entry.putLong("last_evidence_tick", value.lastEvidenceTick());
+        });
+
+        ValueOutput.ValueOutputList stations = output.childrenList("known_stations");
+        this.knownStations.forEach((kind, remembered) -> {
+            ValueOutput entry = stations.addChild();
+            entry.putString("kind", kind.name());
+            writeDimension(entry, remembered.dimension());
+            writePos(entry, remembered.target().blockPos());
+        });
+
+        ValueOutput.ValueOutputList provoked = output.childrenList("provoked_players");
+        this.provokedPlayersUntil.forEach((uuid, until) -> {
+            ValueOutput entry = provoked.addChild();
+            entry.putString("uuid", uuid.toString());
+            entry.putLong("until", until);
+        });
+    }
+
+    public void load(ValueInput input) {
+        this.homeDimension = null;
+        this.homeBedPosition = null;
+        input.child("home").ifPresent(home -> {
+            this.homeDimension = readDimension(home);
+            this.homeBedPosition = readPos(home);
+        });
+
+        this.knownResources.clear();
+        for (ValueInput entry : input.childrenListOrEmpty("known_resources")) {
+            SurvivalPlanner.Resource resource = enumValue(
+                    SurvivalPlanner.Resource.class, entry.getString("resource").orElse(null));
+            ResourceKey<Level> dimension = readDimension(entry);
+            BlockPos pos = readPos(entry);
+            if (resource == null || dimension == null || pos == null) continue;
+            LinkedHashMap<RememberedBlock, Long> remembered =
+                    this.knownResources.computeIfAbsent(resource, ignored -> new LinkedHashMap<>());
+            if (remembered.size() < 128) {
+                remembered.put(new RememberedBlock(dimension, pos), entry.getLongOr("seen_tick", 0L));
+            }
+        }
+
+        this.resourceAvailability.clear();
+        for (ValueInput entry : input.childrenListOrEmpty("resource_availability")) {
+            SurvivalPlanner.Resource resource = enumValue(
+                    SurvivalPlanner.Resource.class, entry.getString("resource").orElse(null));
+            ResourceKey<Level> dimension = readDimension(entry);
+            if (resource == null || dimension == null) continue;
+            this.resourceAvailability.put(resource, new ResourceAvailability(
+                    dimension,
+                    Math.clamp(entry.getIntOr("failures", 0), 0, 5),
+                    entry.getLongOr("last_failure_tick", Long.MIN_VALUE / 2),
+                    entry.getLongOr("last_evidence_tick", Long.MIN_VALUE / 2)));
+        }
+
+        this.knownStations.clear();
+        for (ValueInput entry : input.childrenListOrEmpty("known_stations")) {
+            BlockInteractionStations.Kind kind = enumValue(
+                    BlockInteractionStations.Kind.class, entry.getString("kind").orElse(null));
+            ResourceKey<Level> dimension = readDimension(entry);
+            BlockPos pos = readPos(entry);
+            if (kind == null || dimension == null || pos == null) continue;
+            this.knownStations.put(kind, new RememberedStation(dimension,
+                    new BlockInteractionStations.Target(kind, pos, Vec3.atBottomCenterOf(pos))));
+        }
+
+        this.provokedPlayersUntil.clear();
+        for (ValueInput entry : input.childrenListOrEmpty("provoked_players")) {
+            if (this.provokedPlayersUntil.size() >= 64) break;
+            try {
+                entry.getString("uuid").map(UUID::fromString).ifPresent(uuid ->
+                        this.provokedPlayersUntil.put(uuid, entry.getLongOr("until", 0L)));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+    }
+
+    private static void writeDimension(ValueOutput output, ResourceKey<Level> dimension) {
+        output.putString("dimension", dimension.identifier().toString());
+    }
+
+    private static @Nullable ResourceKey<Level> readDimension(ValueInput input) {
+        Identifier identifier = input.getString("dimension").map(Identifier::tryParse).orElse(null);
+        return identifier == null ? null : ResourceKey.create(Registries.DIMENSION, identifier);
+    }
+
+    private static void writePos(ValueOutput output, BlockPos pos) {
+        output.putInt("x", pos.getX());
+        output.putInt("y", pos.getY());
+        output.putInt("z", pos.getZ());
+    }
+
+    private static @Nullable BlockPos readPos(ValueInput input) {
+        if (input.getInt("x").isEmpty() || input.getInt("y").isEmpty() || input.getInt("z").isEmpty()) return null;
+        return new BlockPos(input.getIntOr("x", 0), input.getIntOr("y", 0), input.getIntOr("z", 0));
+    }
+
+    private static <E extends Enum<E>> @Nullable E enumValue(Class<E> type, @Nullable String value) {
+        if (value == null) return null;
+        try {
+            return Enum.valueOf(type, value);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
 
     /** Apply learned local availability to a raw need without deleting the need itself. */
     public ResourceAdjustment adjustResourceScore(FakeNpcEntity npc, SurvivalPlanner.Resource resource,

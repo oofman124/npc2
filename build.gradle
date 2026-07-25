@@ -26,12 +26,6 @@ loom {
 	}
 }
 
-fabricApi {
-	configureDataGeneration {
-		client = true
-	}
-}
-
 dependencies {
 	// To change the versions see the gradle.properties file
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
@@ -49,11 +43,15 @@ dependencies {
 processResources {
 	def version = project.version
 	def fabricKotlinVersion = project.fabric_kotlin_version
+	def fabricApiVersion = project.fabric_api_version
 	inputs.property "version", version
 	inputs.property "fabricKotlinVersion", fabricKotlinVersion
+	inputs.property "fabricApiVersion", fabricApiVersion
 
 	filesMatching("fabric.mod.json") {
-		expand "version": version, "fabricKotlinVersion": fabricKotlinVersion
+		expand "version": version,
+			"fabricKotlinVersion": fabricKotlinVersion,
+			"fabricApiVersion": fabricApiVersion
 	}
 }
 

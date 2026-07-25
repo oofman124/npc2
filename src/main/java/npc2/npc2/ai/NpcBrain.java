@@ -5,6 +5,7 @@ import io.github.oofman124.asterisk.Graph;
 import net.minecraft.world.phys.Vec3;
 import npc2.npc2.FakeNpcEntity;
 import npc2.npc2.NpcController;
+import npc2.npc2.Npc2Config;
 import npc2.npc2.ai.combat.AttackTargetNode;
 import npc2.npc2.ai.combat.BlockMobNode;
 import npc2.npc2.ai.combat.ChaseTargetNode;
@@ -69,7 +70,6 @@ public class NpcBrain {
     private static final int PLAN_INTERVAL = 5;
     private static final int EQUIPMENT_INTERVAL = 5;
     private static final int DEFENSE_SCAN_INTERVAL = 3;
-    private static final int RESOURCE_SURVEY_BLOCK_BUDGET = 256;
 
     public final Graph graph;
     public final FakeNpcEntity npc;
@@ -313,7 +313,7 @@ public class NpcBrain {
 
     public void Tick() {
         ChestLooting.tickVisual(this.npc);
-        ResourceSurveyor.tick(this.npc, RESOURCE_SURVEY_BLOCK_BUDGET);
+        ResourceSurveyor.tick(this.npc, Npc2Config.get().resourceSurveyBlockBudget);
         if (NpcTickSchedule.due(this.npc, 200, 17)) this.memories.pruneKnownResources(this.npc);
         NpcHome.updateReturnIntent(this);
         if (NpcTickSchedule.due(this.npc, PLAN_INTERVAL, 0)) {

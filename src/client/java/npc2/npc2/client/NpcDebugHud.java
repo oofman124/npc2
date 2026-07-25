@@ -8,6 +8,7 @@ import net.minecraft.client.KeyMapping;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.resources.language.I18n;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
@@ -17,6 +18,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gizmos.Gizmos;
 import npc2.npc2.FakeNpcEntity;
+import npc2.npc2.Npc2Config;
 import npc2.npc2.network.NpcDebugRequestPayload;
 import npc2.npc2.network.NpcDebugSnapshotPayload;
 
@@ -26,6 +28,9 @@ import java.util.List;
 public final class NpcDebugHud {
     private static final int PANEL_WIDTH = 282;
     private static final int INNER_WIDTH = PANEL_WIDTH - 14;
+    private static final int COMPACT_PANEL_WIDTH = 250;
+    private static final int COMPACT_INNER_WIDTH = COMPACT_PANEL_WIDTH - 14;
+    private static final float COMPACT_SCALE = 0.8F;
     private static final int COLUMN_GAP = 8;
     private static final int COLUMN_WIDTH = (INNER_WIDTH - COLUMN_GAP) / 2;
     private static final long REQUEST_INTERVAL_NANOS = 500_000_000L;
@@ -37,18 +42,28 @@ public final class NpcDebugHud {
     private static long lastSnapshotNanos;
     private static int highlightedEntityId = -1;
     private static KeyMapping pinKey;
+    private static KeyMapping toggleDebugKey;
+    private static boolean debugVisible;
 
     private NpcDebugHud() {
     }
 
     public static void registerControls() {
+        debugVisible = Npc2Config.get().debugHud;
         pinKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.npc2.pin_debug", InputConstants.Type.KEYSYM, InputConstants.KEY_X, KeyMapping.Category.DEBUG));
+        toggleDebugKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.npc2.toggle_debug", InputConstants.Type.KEYSYM, InputConstants.KEY_F8, KeyMapping.Category.DEBUG));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (pinKey.consumeClick()) {
-                if (client.gui.screen() == null) togglePin(client);
+            while (toggleDebugKey.consumeClick()) {
+                debugVisible = !debugVisible;
+                if (!debugVisible) updateHighlight(client, -1);
             }
-            if (client.level != null && client.gui.screen() == null) {
+            while (pinKey.consumeClick()) {
+                if (debugVisible && client.gui.screen() == null) togglePin(client);
+            }
+            if (debugVisible && Npc2Config.get().debugPathRendering
+                    && client.level != null && client.gui.screen() == null) {
                 try (var ignored = client.collectPerTickGizmos()) {
                     emitPathTrace(client);
                 }
@@ -63,8 +78,21 @@ public final class NpcDebugHud {
         }
     }
 
+    public static void reset(Minecraft minecraft) {
+        updateHighlight(minecraft, -1);
+        snapshot = null;
+        displayedEntityId = -1;
+        pinnedEntityId = -1;
+        lastRequestNanos = 0L;
+        lastSnapshotNanos = 0L;
+    }
+
     public static void render(GuiGraphicsExtractor graphics) {
         Minecraft minecraft = Minecraft.getInstance();
+        if (!debugVisible) {
+            updateHighlight(minecraft, -1);
+            return;
+        }
         clearInvalidPin(minecraft);
         if (minecraft.gui.screen() != null) {
             updateHighlight(minecraft, -1);
@@ -115,6 +143,11 @@ public final class NpcDebugHud {
     private static void drawPanel(GuiGraphicsExtractor graphics, Font font, NpcDebugSnapshotPayload data, boolean pinned) {
         int x = Math.max(4, graphics.guiWidth() - PANEL_WIDTH - 6);
         int y = 4;
+        if (!pinned) {
+            drawCompactPanel(graphics, font, data);
+            return;
+        }
+
         int aiCount = Math.min(7, data.aiLines().size());
         int movementCount = Math.min(6, data.movementLines().size());
         int columnsY = y + 64;
@@ -129,26 +162,26 @@ public final class NpcDebugHud {
         graphics.fill(x, y, x + PANEL_WIDTH, bottom, 0xD010141A);
         graphics.outline(x, y, PANEL_WIDTH, bottom - y, 0xFF5B91C9);
 
-        text(graphics, font, (pinned ? "[PINNED] " : "") + data.name() + "  #" + data.entityId(),
-                x + 7, y + 6, pinned ? 0xFFFFD45A : 0xFFFFFFFF);
+        text(graphics, font, I18n.get("hud.npc2.pinned", data.name(), data.entityId()),
+                x + 7, y + 6, 0xFFFFD45A);
         drawHealth(graphics, font, data, x + 7, y + 19);
-        textClipped(graphics, font, pinHint(pinned), x + 7, y + 30, 0xFF93A0AE, INNER_WIDTH);
+        textClipped(graphics, font, controlsHint(true), x + 7, y + 30, 0xFF93A0AE, INNER_WIDTH);
 
         int statusY = y + 41;
-        textClipped(graphics, font, "Status", x + 7, statusY + 5, 0xFF79B8F3, 40);
+        textClipped(graphics, font, I18n.get("hud.npc2.status"), x + 7, statusY + 5, 0xFF79B8F3, 40);
         drawSlots(graphics, font, data.statusIcons(), x + 50, statusY, 10);
 
         int leftX = x + 7;
         int rightX = leftX + COLUMN_WIDTH + COLUMN_GAP;
-        int leftCursor = drawSection(graphics, font, "Decision", data.aiLines(), 7,
+        int leftCursor = drawSection(graphics, font, I18n.get("hud.npc2.decision"), data.aiLines(), 7,
                 leftX, columnsY, COLUMN_WIDTH);
-        drawSection(graphics, font, "Movement / path", data.movementLines(), 6,
+        drawSection(graphics, font, I18n.get("hud.npc2.movement"), data.movementLines(), 6,
                 leftX, leftCursor + 4, COLUMN_WIDTH);
 
-        textClipped(graphics, font, "Resource needs", rightX, columnsY, 0xFF79B8F3, COLUMN_WIDTH);
+        textClipped(graphics, font, I18n.get("hud.npc2.resource_needs"), rightX, columnsY, 0xFF79B8F3, COLUMN_WIDTH);
         int rightCursor = columnsY + 10;
         if (needCount == 0) {
-            textClipped(graphics, font, "No current deficits", rightX + 3, rightCursor,
+            textClipped(graphics, font, I18n.get("hud.npc2.no_deficits"), rightX + 3, rightCursor,
                     0xFF93A0AE, COLUMN_WIDTH - 3);
             rightCursor += 9;
         } else {
@@ -158,24 +191,63 @@ public final class NpcDebugHud {
             }
         }
         rightCursor += 4;
-        textClipped(graphics, font, "Equipment", rightX, rightCursor, 0xFF79B8F3, COLUMN_WIDTH);
+        textClipped(graphics, font, I18n.get("hud.npc2.equipment"), rightX, rightCursor, 0xFF79B8F3, COLUMN_WIDTH);
         drawSlots(graphics, font, data.equipment(), rightX, rightCursor + 10, 6);
 
-        textClipped(graphics, font, "Inventory", x + 7, inventoryY, 0xFF79B8F3, INNER_WIDTH);
+        textClipped(graphics, font, I18n.get("hud.npc2.inventory"), x + 7, inventoryY, 0xFF79B8F3, INNER_WIDTH);
         drawSlots(graphics, font, data.inventory(), x + 7, inventoryY + 10, inventoryColumns);
     }
 
-    private static String pinHint(boolean pinned) {
-        if (pinKey == null || pinKey.isUnbound()) return "Pin debug HUD: unbound";
-        return pinKey.getTranslatedKeyMessage().getString() + (pinned ? ": Unpin debug HUD" : ": Pin debug HUD");
+    private static void drawCompactPanel(GuiGraphicsExtractor graphics, Font font,
+                                         NpcDebugSnapshotPayload data) {
+        int renderedWidth = Math.round(COMPACT_PANEL_WIDTH * COMPACT_SCALE);
+        int x = Math.max(4, graphics.guiWidth() - renderedWidth - 6);
+        int y = 4;
+        int height = 43;
+        graphics.pose().pushMatrix();
+        try {
+            graphics.pose().translate(x, y);
+            graphics.pose().scale(COMPACT_SCALE, COMPACT_SCALE);
+            graphics.fill(0, 0, COMPACT_PANEL_WIDTH, height, 0xD010141A);
+            graphics.outline(0, 0, COMPACT_PANEL_WIDTH, height, 0xFF5B91C9);
+            textClipped(graphics, font, I18n.get("hud.npc2.compact", data.name(), data.entityId()),
+                    7, 5, 0xFFFFFFFF, COMPACT_INNER_WIDTH);
+            drawHealth(graphics, font, data, 7, 17, COMPACT_INNER_WIDTH);
+            textClipped(graphics, font, controlsHint(false),
+                    7, 30, 0xFF93A0AE, COMPACT_INNER_WIDTH);
+        } finally {
+            graphics.pose().popMatrix();
+        }
+    }
+
+    private static String controlsHint(boolean pinned) {
+        return I18n.get(pinned ? "hud.npc2.controls_pinned_hint" : "hud.npc2.controls_hint",
+                pinKeyName(), toggleDebugKeyName());
+    }
+
+    public static String pinKeyName() {
+        return keyName(pinKey);
+    }
+
+    public static String toggleDebugKeyName() {
+        return keyName(toggleDebugKey);
+    }
+
+    private static String keyName(KeyMapping keyMapping) {
+        if (keyMapping == null || keyMapping.isUnbound()) return I18n.get("hud.npc2.key_unbound");
+        return keyMapping.getTranslatedKeyMessage().getString();
     }
 
     private static void drawHealth(GuiGraphicsExtractor graphics, Font font, NpcDebugSnapshotPayload data, int x, int y) {
-        int width = PANEL_WIDTH - 14;
+        drawHealth(graphics, font, data, x, y, PANEL_WIDTH - 14);
+    }
+
+    private static void drawHealth(GuiGraphicsExtractor graphics, Font font, NpcDebugSnapshotPayload data,
+                                   int x, int y, int width) {
         float ratio = data.maxHealth() <= 0.0F ? 0.0F : Math.clamp(data.health() / data.maxHealth(), 0.0F, 1.0F);
         graphics.fill(x, y, x + width, y + 9, 0xFF351B1B);
         graphics.fill(x + 1, y + 1, x + 1 + Math.round((width - 2) * ratio), y + 8, 0xFFC83B3B);
-        String health = String.format(java.util.Locale.ROOT, "%.1f / %.1f HP", data.health(), data.maxHealth());
+        String health = I18n.get("hud.npc2.health", data.health(), data.maxHealth());
         graphics.centeredText(font, health, x + width / 2, y + 1, 0xFFFFFFFF);
     }
 
@@ -198,8 +270,7 @@ public final class NpcDebugHud {
         int textX = x + 22;
         textClipped(graphics, font, need.label() + "  " + need.current() + "/" + need.target(),
                 textX, y + 2, 0xFFF1F4F7, width - 24);
-        String score = String.format(java.util.Locale.ROOT, "score %.0f  local %.0f%%",
-                need.score(), need.confidence() * 100.0F);
+        String score = I18n.get("hud.npc2.need_score", need.score(), need.confidence() * 100.0F);
         textClipped(graphics, font, score, textX, y + 11, confidenceColor(need.confidence()), width - 24);
         int barWidth = width - 24;
         graphics.fill(textX, y + 21, textX + barWidth, y + 23, 0xFF151A20);

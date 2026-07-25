@@ -5,6 +5,8 @@
 ![Minecraft Version](https://img.shields.io/badge/minecraft-26.2-blue)
 ![Fabric](https://img.shields.io/badge/fabric-blue)
 
+**Modrinth: [modrinth.com/mod/npc2](https://modrinth.com/mod/npc2)**
+
 npc2 is an experimental Fabric mod for Minecraft 26.2 that adds autonomous survival
 NPCs. Each NPC has a weighted survival plan, persistent memories, vanilla mob physics,
 and a node-based behavior graph for gathering, crafting, combat, storage, movement, and
@@ -23,8 +25,7 @@ to alter the environment by mining and placing blocks.
 >
 >NPCs are horribly slow when floating in the water. This bug will be fixed soon.
 >
->npc2's tab may not be visible from the inventory in Creative mode without using the arrow buttons.
-
+> NPCs may occasionally freeze while retreating from a player. They resume  once the player leaves their detection range, enters Creative mode, or the configured player_retaliation_ticks duration expires. This bug will be fixed soon.
 ## Table of contents
 
 - [Requirements](#requirements)
@@ -36,6 +37,7 @@ to alter the environment by mining and placing blocks.
   - [Loot and storage](#loot-and-storage)
   - [Combat and survival](#combat-and-survival)
   - [Beds, home, and floor sleep](#beds-home-and-floor-sleep)
+- [Configuration](#configuration)
 - [Debug HUD](#debug-hud)
 - [Common problems](#common-problems)
 - [Building and development](#building-and-development)
@@ -51,8 +53,8 @@ to alter the environment by mining and placing blocks.
   `0.154.2+26.2`)
 - Fabric Language Kotlin `1.13.13+kotlin.2.4.10` or newer
 - npc2 on both the server and every joining client
-note:
-There is currently no configuration screen or config file.
+
+See [CHANGELOG.md](CHANGELOG.md) for release changes.
 
 ## Installation
 
@@ -60,13 +62,15 @@ There is currently no configuration screen or config file.
 2. Put Fabric API, Fabric Language Kotlin, and the npc2 jar in the instance's `mods`
    directory.
 3. In multiplayer, install all three jars on the dedicated server and on each client.
-4. Start the game and confirm that an `npc2` tab appears in the creative inventory.
+4. Enter a world and confirm that npc2's load notice and quickstart appear in chat.
 
 When building from source, use the normal jar in `build/libs`, not the `-sources` jar.
 
 ## Spawning an NPC
 
-The Survivor NPC Spawn Egg is in its own `npc2` creative inventory tab. It can also be
+The Survivor NPC Spawn Egg is in the vanilla Creative inventory's `Spawn Eggs` tab. It
+uses its own editable texture at
+`src/main/resources/assets/npc2/textures/item/fake_npc_spawn_egg.png`. It can also be
 given with:
 
 ```mcfunction
@@ -77,10 +81,15 @@ Use the egg on solid, open ground. A forest edge, plains biome near trees, or ex
 stone hillside gives a new NPC the best chance to find food, logs, stone, coal, wool,
 and surface-accessible iron.
 
-Creative and spectator players are excluded from combat targeting. Any alive, attackable
-player in another game mode, including survival and adventure, is treated as hostile when
-within the NPC's current detection radius and reachable by its pathfinder. There is no
-owner, team, or friendly-player exception yet, so observe in creative or spectator mode.
+When the client enters a world, npc2 adds a load notice and this spawning quickstart to
+game chat. The notice appears once per world connection, including singleplayer, LAN,
+and dedicated-server connections. The message supports multiple formatted lines. Its
+spawn-egg command and issue-tracker link are underlined and clickable, and it lists the
+current keys for pinning the NPC panel and toggling all npc2 debugging.
+
+Players are friendly by default. An NPC only retaliates against a survival or adventure
+player who harms that specific NPC, and it forgets the attack after the configured
+retaliation time. Creative and spectator players are never combat targets.
 
 ## How the NPC works
 
@@ -151,11 +160,11 @@ to supply it. If it refuses an item, check the HUD's resource needs and inventor
 
 ### Combat and survival
 
-NPCs fight monsters, bees, and non-creative/non-spectator players. They can hunt adult
-food animals when food is the highest survival need and sheep when wool is needed for a
-bed. NPCs equip better weapons and armor, use shields and totems, retreat at critical
-health, respond to ranged threats, and may place a carried block as emergency creeper
-cover when no shield is available.
+NPCs fight monsters and bees, and retaliate against survival/adventure players who harm
+them. They can hunt adult food animals when food is the highest survival need and sheep
+when wool is needed for a bed. NPCs equip better weapons and armor, use shields and
+totems, retreat at critical health, respond to ranged threats, and may place a carried
+block as emergency creeper cover when no shield is available.
 
 Sleeping reduces hostile detection and defensive engagement ranges to 25 percent of
 their normal values.
@@ -172,16 +181,49 @@ If no bed can be found or placed by midnight, the NPC sleeps directly on the flo
 wakes at daylight or for a valid threat. Floor sleep uses ground height rather than the
 vanilla bed-height offset.
 
+NPC bag contents, home, remembered resources and stations, learned local availability,
+and active player retaliation survive chunk unloading and world restarts. Bag contents
+drop into the world when the NPC dies.
+
+## Configuration
+
+On first launch, npc2 creates:
+
+```text
+.minecraft/config/npc2/npc2.properties
+```
+
+This is a commented Java properties file that can be edited with any text editor while
+Minecraft is closed. Restart the game or dedicated server after changing it.
+
+| Setting | Default | Purpose |
+| --- | ---: | --- |
+| `startup_message` | `true` | Show the formatted quickstart when entering a world |
+| `debug_hud` | `true` | Initial visibility of NPC debugging; `F8` can still toggle it |
+| `debug_path_rendering` | `true` | Draw the selected NPC's path in the world |
+| `debug_max_distance` | `128.0` | Maximum server distance for debug snapshots |
+| `player_retaliation_ticks` | `600` | How long an NPC remembers a player attack; `0` disables retaliation |
+| `resource_search_block_budget` | `8192` | Work allowed for each primary resource-search slice |
+| `resource_survey_block_budget` | `256` | Background resource checks per NPC tick |
+
+Lowering either search budget reduces per-tick work but makes resource discovery slower.
+
 ## Debug HUD
 
-Close menus and aim near a living NPC to open the debug panel. Selection uses a forgiving
-angular cone instead of requiring an exact crosshair hit, works at any range at which the
-client is actually tracking the entity, and requires an unobstructed line of sight.
+Close menus and aim near a living NPC to open the compact debug panel. It shows the NPC's
+name, entity ID, health, and the configured pin and full-debug toggle keys in a smaller
+frame. Selection uses a forgiving angular cone instead of requiring an exact crosshair
+hit, works at any range at which the client is actually tracking the entity, and requires
+an unobstructed line of sight.
 
 Press `X` while hovering an NPC to pin it. Press `X` again to unpin it. The binding is
 listed under the `Debug` category in Minecraft's Controls menu. A pin is automatically
 cleared if its NPC dies, is removed, unloads, or the client leaves the world, so another
-NPC can be inspected immediately.
+NPC can be inspected immediately. Pinning expands the compact panel to show the full
+debug information below.
+
+Press `F8` to hide or show all npc2 debugging, including the HUD, glow, and path trace.
+Both bindings can be changed under the `Debug` category in Controls.
 
 The selected or pinned NPC receives a glowing outline on the local client. The panel is
 server-authoritative and refreshes roughly twice per second. Its sections show:
@@ -217,7 +259,7 @@ idle phases.
 | `X` does nothing | The cursor is not currently selecting an NPC or another key binding conflicts | Confirm the HUD is visible, then check Controls > Debug and rebind `Pin NPC Debug Panel` |
 | A pinned NPC died and another HUD will not open | This was caused by a stale pinned entity ID in older builds | Update to the current build; dead, removed, unloaded, and disconnected targets now clear automatically |
 | The panel appears and then vanishes | The server stopped returning snapshots, commonly because the entity died/unloaded or client and server mod versions differ | Keep the NPC loaded and install the same npc2/Fabric versions on both sides |
-| The NPC attacks the observer | Alive, attackable survival and adventure players are intentional combat targets; there is no owner/team exception yet | Observe in creative or spectator mode |
+| The NPC attacks a player | That player harmed this NPC within the configured retaliation window | Stop attacking and wait for `player_retaliation_ticks` to expire, or set it to `0` and restart |
 | `searching resources` shows no movement | The primary block scan is running and deliberately owns no path | Wait for the staged scan to finish; use the path and search-radius lines to confirm progress |
 | The NPC repeatedly explores without finding anything | Candidate blocks are absent, unloaded, sealed away from outside air, reserved, or unreachable | Keep surrounding chunks loaded, expose a route to resources, move the NPC to a richer surface area, or provide supplies as drops/chest loot |
 | A resource's score keeps decreasing | Repeated complete searches or failed routes reduced learned local availability | This is expected fallback behavior; expose the resource, move the NPC, or wait for confidence recovery |
@@ -285,7 +327,9 @@ keeping persistent state in node instance fields.
 
 Before committing a behavior change, run `./gradlew build`, test a newly spawned NPC,
 inspect it through at least one gather/craft cycle, test an unreachable target, and test
-death or chunk unloading while the HUD is pinned.
+death or chunk unloading while the HUD is pinned. Put identifiable items in the NPC bag,
+restart the world, and confirm the bag and remembered home persist; then kill a test NPC
+and confirm its bag contents drop.
 
 ## License
 

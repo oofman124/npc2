@@ -8,6 +8,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import npc2.npc2.Npc2Config;
 import npc2.npc2.ai.NpcBrain;
 import npc2.npc2.ai.NpcTickSchedule;
 import org.jspecify.annotations.NullMarked;
@@ -20,7 +21,6 @@ public class GatherResourcesNode extends ExecutableNode {
     private static final int POST_HARVEST_SEARCH_JITTER = 31;
     private static final int FAILED_TARGET_SEARCH_DELAY = 10;
     private static final int WORK_DELAY = 20;
-    private static final int SEARCH_BLOCK_BUDGET = 8192;
     private static final int EXPLORATION_SEARCH_DELAY = 100;
     private final int radius;
     public final SignalPort outPort;
@@ -56,7 +56,7 @@ public class GatherResourcesNode extends ExecutableNode {
                 if (NpcTickSchedule.due(brain.npc, 2, 0)) {
                     BlockResourceGathering.Search search = brain.memories.resourceSearch;
                     BlockResourceGathering.SearchProgress progress = BlockResourceGathering.continueSearch(
-                            brain.npc, search, SEARCH_BLOCK_BUDGET);
+                            brain.npc, search, Npc2Config.get().resourceSearchBlockBudget);
                     if (progress.target() != null && BlockResourceGathering.claim(brain.npc, progress.target())) {
                         brain.memories.resourceTarget = progress.target();
                         brain.memories.resourceSearch = null;

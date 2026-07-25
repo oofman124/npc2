@@ -13,16 +13,21 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.network.protocol.game.ClientboundAnimatePacket;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ContainerUser;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.ContainerOpenersCounter;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import npc2.npc2.ai.CoolEntity;
 import npc2.npc2.ai.NpcMemories;
 
@@ -154,6 +159,39 @@ public class FakeNpcEntity extends PathfinderMob implements ContainerUser {
 
 	public NpcMemories getMemories() {
 		return this.memories;
+	}
+
+	@Override
+	protected void addAdditionalSaveData(ValueOutput output) {
+		super.addAdditionalSaveData(output);
+		ContainerHelper.saveAllItems(output.child("npc2_bag"), this.inventory.getItems());
+		this.memories.save(output.child("npc2_memories"));
+	}
+
+	@Override
+	protected void readAdditionalSaveData(ValueInput input) {
+		super.readAdditionalSaveData(input);
+		this.inventory.clearContent();
+		ContainerHelper.loadAllItems(input.childOrEmpty("npc2_bag"), this.inventory.getItems());
+		this.memories.load(input.childOrEmpty("npc2_memories"));
+	}
+
+	@Override
+	public boolean hurtServer(ServerLevel level, DamageSource source, float amount) {
+		boolean hurt = super.hurtServer(level, source, amount);
+		if (hurt && source.getEntity() instanceof Player player
+				&& !player.isCreative() && !player.isSpectator()) {
+			this.memories.provoke(this, player);
+		}
+		return hurt;
+	}
+
+	@Override
+	protected void dropCustomDeathLoot(ServerLevel level, DamageSource source, boolean recentlyHit) {
+		super.dropCustomDeathLoot(level, source, recentlyHit);
+		for (ItemStack stack : this.inventory.removeAllItems()) {
+			if (!stack.isEmpty()) this.drop(stack, true, false);
+		}
 	}
 
 	/**

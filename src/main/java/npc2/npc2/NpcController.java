@@ -168,8 +168,8 @@ public interface NpcController {
     }
 
     /**
-     * Find the nearest attackable living entity within range: players (except this NPC)
-     * and mobs. Creative/spectator players and other fake NPCs are ignored.
+     * Find the nearest attackable living entity within range: hostile mobs and players
+     * who recently harmed this NPC. Creative/spectator players and other fake NPCs are ignored.
      * Entities hidden strictly inside caves beneath the NPC are ignored via smart vertical raycasts.
      */
     default LivingEntity findNearestTarget(FakeNpcEntity npc, double radius) {
@@ -301,7 +301,8 @@ public interface NpcController {
             return false;
         }
         if (candidate instanceof Player player) {
-            return !player.isCreative() && !player.isSpectator();
+            return !player.isCreative() && !player.isSpectator()
+                    && npc.getMemories().isProvokedBy(npc, player);
         }
         if (candidate instanceof Animal) {
             return false;

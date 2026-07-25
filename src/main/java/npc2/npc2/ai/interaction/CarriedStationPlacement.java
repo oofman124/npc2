@@ -150,7 +150,7 @@ public final class CarriedStationPlacement {
     }
 
     private static boolean isValidSite(NpcBrain brain, BlockItem item, BlockPos placeAt) {
-        if (!brain.npc.level().hasChunkAt(placeAt)
+        if (!brain.npc.level().hasChunk(placeAt.getX() >> 4, placeAt.getZ() >> 4)
                 || !brain.npc.level().getWorldBorder().isWithinBounds(placeAt)
                 || !brain.npc.level().getBlockState(placeAt).canBeReplaced()) return false;
         BlockPos floor = placeAt.below();

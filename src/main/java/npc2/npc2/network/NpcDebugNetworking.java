@@ -1,6 +1,7 @@
 package npc2.npc2.network;
 
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -9,6 +10,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec3;
 import npc2.npc2.ai.CoolEntity;
+import npc2.npc2.Npc2Config;
 import npc2.npc2.ai.NpcBrain;
 import npc2.npc2.ai.interaction.BlockInteractionStations;
 import npc2.npc2.ai.survival.SurvivalPlanner;
@@ -31,6 +33,8 @@ public final class NpcDebugNetworking {
     public static void register() {
         PayloadTypeRegistry.serverboundPlay().register(NpcDebugRequestPayload.TYPE, NpcDebugRequestPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(NpcDebugSnapshotPayload.TYPE, NpcDebugSnapshotPayload.CODEC);
+        ServerPlayConnectionEvents.DISCONNECT.register((listener, server) ->
+                LAST_REQUEST.remove(listener.getPlayer().getUUID()));
         ServerPlayNetworking.registerGlobalReceiver(NpcDebugRequestPayload.TYPE, (payload, context) -> {
             long now = context.player().level().getGameTime();
             long previous = LAST_REQUEST.getOrDefault(context.player().getUUID(), Long.MIN_VALUE / 2);
@@ -38,7 +42,9 @@ public final class NpcDebugNetworking {
             LAST_REQUEST.put(context.player().getUUID(), now);
 
             if (!(context.player().level().getEntity(payload.entityId()) instanceof CoolEntity npc)
-                    || !npc.isAlive()) {
+                    || !npc.isAlive()
+                    || context.player().distanceToSqr(npc)
+                    > Npc2Config.get().debugMaxDistance * Npc2Config.get().debugMaxDistance) {
                 return;
             }
             ServerPlayNetworking.send(context.player(), createSnapshot(npc));

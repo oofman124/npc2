@@ -51,9 +51,9 @@ public final class NpcDebugHud {
     public static void registerControls() {
         debugVisible = Npc2Config.get().debugHud;
         pinKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.npc2.pin_debug", InputConstants.Type.KEYSYM, InputConstants.KEY_X, KeyMapping.Category.DEBUG));
+                "key.npc2.pin_debug", InputConstants.Type.KEYBOARD, InputConstants.KEY_X, KeyMapping.Category.DEBUG));
         toggleDebugKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.npc2.toggle_debug", InputConstants.Type.KEYSYM, InputConstants.KEY_F8, KeyMapping.Category.DEBUG));
+                "key.npc2.toggle_debug", InputConstants.Type.KEYBOARD, InputConstants.KEY_F8, KeyMapping.Category.DEBUG));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (toggleDebugKey.consumeClick()) {
                 debugVisible = !debugVisible;

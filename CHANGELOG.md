@@ -2,6 +2,13 @@
 
 All notable changes to npc2 are documented here.
 
+## 0.3.1-alpha+26.3
+
+- Updated the mod, Fabric Loader, Fabric API, Fabric Language Kotlin, and Gradle wrapper for Minecraft 26.3.
+- Migrated NPC swing animations to Minecraft 26.3's built-in entity swing state and rendering APIs.
+- Updated renamed block-search, key-mapping, and item-drop APIs.
+- Refreshed the README with 26.3 requirements and clearer installation and gameplay guidance.
+
 ## 0.3.0-alpha+26.2
 
 - Moved the Survivor NPC Spawn Egg into the vanilla Spawn Eggs creative tab.

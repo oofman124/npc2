@@ -57,7 +57,7 @@ public class PrepareCampNode extends ExecutableNode {
     }
 
     private static void placeBedsideTorch(NpcBrain brain, BlockPos bed) {
-        for (BlockPos pos : BlockPos.withinManhattan(bed, 3, 2, 3)) {
+        for (BlockPos pos : BlockPos.withinBoxByManhattanDistance(bed, 3, 2, 3)) {
             if (brain.npc.level().getBlockState(pos).is(Blocks.TORCH)
                     || brain.npc.level().getBlockState(pos).is(Blocks.WALL_TORCH)) return;
         }

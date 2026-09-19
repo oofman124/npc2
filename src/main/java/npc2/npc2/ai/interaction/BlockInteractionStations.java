@@ -42,7 +42,7 @@ public final class BlockInteractionStations {
         if (remembered != null) npc.getMemories().knownStations.remove(kind);
         BlockPos origin = npc.blockPosition();
         List<BlockPos> candidates = new ArrayList<>();
-        for (BlockPos pos : BlockPos.withinManhattan(origin, radius, 6, radius)) {
+        for (BlockPos pos : BlockPos.withinBoxByManhattanDistance(origin, radius, 6, radius)) {
             if (hasChunk(level, pos) && kind.matches(level.getBlockState(pos)) && isAvailable(npc, kind, pos)) {
                 candidates.add(pos.immutable());
             }

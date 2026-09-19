@@ -9,7 +9,6 @@ import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
 import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
-import net.minecraft.world.item.SwingAnimationType;
 import net.minecraft.resources.Identifier;
 import npc2.npc2.FakeNpcEntity;
 
@@ -32,15 +31,6 @@ public class FakeNpcRenderer extends HumanoidMobRenderer<FakeNpcEntity, Humanoid
 	@Override
 	public HumanoidRenderState createRenderState() {
 		return new HumanoidRenderState();
-	}
-
-	@Override
-	public void extractRenderState(FakeNpcEntity entity, HumanoidRenderState state, float partialTicks) {
-		super.extractRenderState(entity, state, partialTicks);
-		state.attackTime = entity.getAttackAnim(partialTicks);
-		if (entity.swinging && state.attackTime > 0.0F) {
-			state.swingAnimationType = SwingAnimationType.WHACK;
-		}
 	}
 
 	@Override

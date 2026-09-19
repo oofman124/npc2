@@ -3,15 +3,10 @@ package npc2.npc2;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.syncher.EntityDataAccessor;
-import net.minecraft.network.syncher.EntityDataSerializers;
-import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.network.protocol.game.ClientboundAnimatePacket;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.InteractionHand;
@@ -28,6 +23,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.ContainerOpenersCounter;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.util.Prediction;
 import npc2.npc2.ai.CoolEntity;
 import npc2.npc2.ai.NpcMemories;
 
@@ -38,15 +34,10 @@ import npc2.npc2.ai.NpcMemories;
 public class FakeNpcEntity extends PathfinderMob implements ContainerUser {
 
 	private static final int INVENTORY_SIZE = 27;
-	private static final EntityDataAccessor<Integer> DATA_ATTACK_SWING_SEQUENCE = SynchedEntityData.defineId(FakeNpcEntity.class, EntityDataSerializers.INT);
-	private static final EntityDataAccessor<Integer> DATA_ATTACK_SWING_HAND = SynchedEntityData.defineId(FakeNpcEntity.class, EntityDataSerializers.INT);
-
 	private NpcController controller;
 	private final NpcPathNavigation navigation;
 	private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
 	private final NpcMemories memories = new NpcMemories();
-	private int lastClientSwingSequence;
-
 	protected MinecraftServer npcServer;
 	protected ServerLevel respawnLevel;
 	protected String npcName;
@@ -60,13 +51,6 @@ public class FakeNpcEntity extends PathfinderMob implements ContainerUser {
 		this.setPersistenceRequired();
 		this.setCanPickUpLoot(true);
 		this.getNavigation().setCanFloat(true);
-	}
-
-	@Override
-	protected void defineSynchedData(SynchedEntityData.Builder entityData) {
-		super.defineSynchedData(entityData);
-		entityData.define(DATA_ATTACK_SWING_SEQUENCE, 0);
-		entityData.define(DATA_ATTACK_SWING_HAND, 0);
 	}
 
 	public static AttributeSupplier.Builder createAttributes() {
@@ -120,38 +104,6 @@ public class FakeNpcEntity extends PathfinderMob implements ContainerUser {
 		super.pickUpItem(level, entity);
 	}
 
-	@Override
-	public void aiStep() {
-		this.updateSwingTime();
-		super.aiStep();
-	}
-
-	@Override
-	public void swing(InteractionHand hand, boolean sendToSwingingEntity) {
-		this.beginSwingAnimation(hand);
-		if (this.level() instanceof ServerLevel serverLevel) {
-			ClientboundAnimatePacket packet = new ClientboundAnimatePacket(this, hand == InteractionHand.MAIN_HAND ? 0 : 3);
-			ServerChunkCache chunkSource = serverLevel.getChunkSource();
-			if (sendToSwingingEntity) {
-				chunkSource.sendToTrackingPlayersAndSelf(this, packet);
-			} else {
-				chunkSource.sendToTrackingPlayers(this, packet);
-			}
-		}
-	}
-
-	private void beginSwingAnimation(InteractionHand hand) {
-		this.swinging = true;
-		this.swingingArm = hand;
-		this.swingTime = 0;
-		this.attackAnim = 0.0F;
-		this.oAttackAnim = 0.0F;
-		if (!this.level().isClientSide()) {
-			this.entityData.set(DATA_ATTACK_SWING_SEQUENCE, this.entityData.get(DATA_ATTACK_SWING_SEQUENCE) + 1);
-			this.entityData.set(DATA_ATTACK_SWING_HAND, hand == InteractionHand.MAIN_HAND ? 0 : 1);
-		}
-	}
-
 	/** Non-equipment bag (armor/weapons wait here until equipped). */
 	public SimpleContainer getInventory() {
 		return this.inventory;
@@ -190,7 +142,7 @@ public class FakeNpcEntity extends PathfinderMob implements ContainerUser {
 	protected void dropCustomDeathLoot(ServerLevel level, DamageSource source, boolean recentlyHit) {
 		super.dropCustomDeathLoot(level, source, recentlyHit);
 		for (ItemStack stack : this.inventory.removeAllItems()) {
-			if (!stack.isEmpty()) this.drop(stack, true, false);
+			if (!stack.isEmpty()) this.drop(stack, true, Prediction.SERVER_ONLY);
 		}
 	}
 
@@ -283,19 +235,6 @@ public class FakeNpcEntity extends PathfinderMob implements ContainerUser {
 	@Override
 	public boolean removeWhenFarAway(double distSqr) {
 		return false;
-	}
-
-	@Override
-	public void onSyncedDataUpdated(EntityDataAccessor<?> accessor) {
-		super.onSyncedDataUpdated(accessor);
-		if (this.level().isClientSide() && (DATA_ATTACK_SWING_SEQUENCE.equals(accessor) || DATA_ATTACK_SWING_HAND.equals(accessor))) {
-			int currentSequence = this.entityData.get(DATA_ATTACK_SWING_SEQUENCE);
-			if (currentSequence != this.lastClientSwingSequence) {
-				this.lastClientSwingSequence = currentSequence;
-				InteractionHand hand = this.entityData.get(DATA_ATTACK_SWING_HAND) == 0 ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
-				this.beginSwingAnimation(hand);
-			}
-		}
 	}
 
 	/** Removes this dead NPC and creates a replacement at its original spawn point. */

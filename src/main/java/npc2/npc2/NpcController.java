@@ -331,12 +331,12 @@ public interface NpcController {
 
     /** Swing the main hand — used for both "attack" and "use item" animations. */
     default void swingHand(FakeNpcEntity npc) {
-        npc.swing(InteractionHand.MAIN_HAND);
+        npc.swingForAttack(InteractionHand.MAIN_HAND);
     }
 
     /** Swing the offhand. */
     default void swingOffhand(FakeNpcEntity npc) {
-        npc.swing(InteractionHand.OFF_HAND);
+        npc.swingForAttack(InteractionHand.OFF_HAND);
     }
 
     /**
